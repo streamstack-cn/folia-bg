@@ -24,87 +24,58 @@ const rand=(a,b)=>a+Math.random()*(b-a);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
 
-/* ── Beat 78BPM ── */
+/* ── 节拍 78BPM ── */
 let F=0;
 const BPM=78,BF=60*60/BPM;
 function bEnv(){return Math.pow(clamp(1-(F%BF)/BF*2.3,0,1),2.8);}
 
-/* ══════════════════════════════════════
-   PRIMITIVES — 一律在 (0,0) 绘制
-   ══════════════════════════════════════ */
-
-// 音符头（椭圆，含可选反光）
-function noteHead(sz,fill,highlight=false){
+/* ════════════════════════════════════════
+   绘制原语（均在 (0,0) 绘制）
+   ════════════════════════════════════════ */
+function noteHead(sz,fill,hl=false){
   G.save();G.rotate(-.36);
   G.beginPath();G.ellipse(0,0,sz*.57,sz*.42,0,0,TAU);
   if(fill){
     G.fillStyle='rgb(18,15,10)';G.fill();
-    if(highlight){
-      // 反光：右上方小亮斑
-      G.save();G.beginPath();
-      G.ellipse(-sz*.13,-sz*.12,sz*.19,sz*.11,.3,0,TAU);
+    if(hl){
+      G.beginPath();G.ellipse(-sz*.14,-sz*.12,sz*.19,sz*.11,.3,0,TAU);
       G.fillStyle='rgba(255,255,255,.52)';G.fill();
-      G.restore();
     }
   } else {
-    // 空心 (二分音符)
     G.fillStyle='rgba(255,255,255,.92)';G.fill();
     G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.13;G.stroke();
-    if(highlight){
-      G.save();G.beginPath();
-      G.ellipse(-sz*.16,-sz*.1,sz*.12,sz*.07,.2,0,TAU);
-      G.fillStyle='rgba(255,255,255,.55)';G.fill();
-      G.restore();
-    }
   }
   G.restore();
 }
-
-// 茎
 function stem(sz,up=true){
   const sx=sz*.44,sy=up?-sz*.08:sz*.08,ey=up?-sz*2.85:sz*2.85;
   G.beginPath();G.moveTo(sx,sy);G.lineTo(sx,ey);
   G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.16;G.lineCap='round';G.stroke();
 }
-
-// 小旗（八分）
 function flag(sz,up=true){
   const sx=sz*.44,top=up?-sz*2.85:sz*2.85,d=up?1:-1;
   G.beginPath();G.moveTo(sx,top);
   G.bezierCurveTo(sx+sz*1.25,top+sz*d*.52,sx+sz*1.1,top+sz*d*1.28,sx+sz*.12,top+sz*d*1.7);
   G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.15;G.lineCap='round';G.stroke();
 }
-
-// 横梁（连音）
 function beam(sz,gap){
   const sx=sz*.44,ex=gap+sz*.44,ty=-sz*3.08;
   G.beginPath();G.moveTo(sx,ty);G.lineTo(ex,ty);
   G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.4;G.lineCap='square';G.stroke();
 }
-
-// ── 音符种类 ──
-function drawQuarter(sz,up,hl){
-  noteHead(sz,true,hl);stem(sz,up);
-}
-function drawHalf(sz,up,hl){
-  noteHead(sz,false,hl);stem(sz,up);
-}
-function drawEighth(sz,up,hl){
-  noteHead(sz,true,hl);stem(sz,up);flag(sz,up);
-}
+function drawQuarter(sz,up,hl){noteHead(sz,true,hl);stem(sz,up);}
+function drawHalf(sz,up,hl){noteHead(sz,false,hl);stem(sz,up);}
+function drawEighth(sz,up,hl){noteHead(sz,true,hl);stem(sz,up);flag(sz,up);}
 function drawBeamed(sz,hl){
   const gap=sz*2.3;
   noteHead(sz,true,hl);
   G.save();G.translate(gap,0);noteHead(sz,true,false);G.restore();
-  const sx=sz*.44,ty=-sz*3.08;
   [0,gap].forEach(dx=>{
-    G.beginPath();G.moveTo(dx+sx,-sz*.08);G.lineTo(dx+sx,ty);
+    G.beginPath();G.moveTo(dx+sz*.44,-sz*.08);G.lineTo(dx+sz*.44,-sz*3.08);
     G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.16;G.lineCap='round';G.stroke();
   });
   beam(sz,gap);
 }
-
-// ── 爱心（参数化大小）──
 function drawHeart(sz){
   G.save();G.scale(sz/16,sz/16);
   G.beginPath();
@@ -115,97 +86,120 @@ function drawHeart(sz){
   G.bezierCurveTo(16,6,8,-2,0,5);
   G.closePath();
   G.fillStyle='rgb(18,15,10)';G.fill();
-  // 小反光
   if(sz>14){
-    G.save();G.beginPath();
-    G.ellipse(-sz*.22*16/sz,-sz*.18*16/sz,sz*.18*16/sz,sz*.1*16/sz,-.4,0,TAU);
+    G.beginPath();G.ellipse(-5,-3,4,2.5,-.4,0,TAU);
     G.fillStyle='rgba(255,255,255,.38)';G.fill();
-    G.restore();
   }
   G.restore();
 }
-
-// ── 星星（四角闪耀）──
 function drawStar(sz){
-  G.save();
   const r1=sz,r2=sz*.38;
   G.beginPath();
   for(let i=0;i<8;i++){
     const a=i/8*TAU-PI/2,r=i%2===0?r1:r2;
     i===0?G.moveTo(Math.cos(a)*r,Math.sin(a)*r):G.lineTo(Math.cos(a)*r,Math.sin(a)*r);
   }
-  G.closePath();
-  G.fillStyle='rgb(18,15,10)';G.fill();
-  // 中心反光点
+  G.closePath();G.fillStyle='rgb(18,15,10)';G.fill();
   G.beginPath();G.arc(-sz*.12,-sz*.14,sz*.14,0,TAU);
   G.fillStyle='rgba(255,255,255,.4)';G.fill();
-  G.restore();
 }
 
-/* ══════════════════════════════════════
-   浮动元素 Particle
-   ══════════════════════════════════════ */
-// 类型权重：60%音符，25%爱心，15%星星
+/* ════════════════════════════════════════
+   浮动元素
+   ════════════════════════════════════════ */
 const POOL=[
-  {t:'quarter',w:8},{t:'eighth',w:8},{t:'half',w:5},{t:'beamed',w:7},
-  {t:'heart_sm',w:5},{t:'heart_md',w:5},{t:'heart_lg',w:3},
-  {t:'star_sm',w:4},{t:'star_md',w:3},
+  {t:'quarter',w:7},{t:'eighth',w:7},{t:'half',w:4},{t:'beamed',w:6},
+  {t:'heart_sm',w:4},{t:'heart_md',w:4},{t:'heart_lg',w:2},
+  {t:'star_sm',w:3},{t:'star_md',w:3},
 ];
-const POOL_TOTAL=POOL.reduce((s,p)=>s+p.w,0);
-function pickType(){
-  let r=rand(0,POOL_TOTAL);
-  for(const p of POOL){if(r<p.w)return p.t;r-=p.w;}
-  return 'quarter';
+const PTOTAL=POOL.reduce((s,p)=>s+p.w,0);
+function pickType(){let r=rand(0,PTOTAL);for(const p of POOL){if(r<p.w)return p.t;r-=p.w;}return'quarter';}
+
+/* 生成X时分三区（左/中/右），保证全屏分布 */
+let zoneCounter=0;
+function spawnX(){
+  const z=zoneCounter%3;zoneCounter++;
+  const seg=W/3;
+  return seg*z+rand(seg*.08,seg*.92);
 }
 
 class Elem{
   constructor(init=false){this.reset(init);}
   reset(init=false){
     const t=this.type=pickType();
-    this.x=rand(W*.05,W*.95);
-    this.y=init?rand(H*.05,H*.96):H+rand(20,90);
-
-    // 尺寸
-    this.sz=t==='quarter'||t==='eighth'||t==='half'?rand(10,26):
-             t==='beamed'?rand(8,17):
+    this.x=spawnX();
+    if(init){
+      // 初始化：均匀分布在全屏
+      this.y=rand(H*.05,H*.92);
+    } else {
+      // 正常生成：70%从底部浮起，30%从中下区域插入
+      this.y=Math.random()<.7?H+rand(20,80):rand(H*.45,H*.88);
+    }
+    this.sz=t==='quarter'||t==='eighth'||t==='half'?rand(11,24):
+             t==='beamed'?rand(9,16):
              t==='heart_sm'?rand(5,11):
              t==='heart_md'?rand(13,22):
-             t==='heart_lg'?rand(26,42):
-             t==='star_sm'?rand(4,9):rand(11,20);
-
-    // 透明度：故意分布很广，形成远近感
-    this.tAlpha=t.startsWith('heart')||t.startsWith('star')
-      ? rand(0.18,0.72)
-      : rand(0.20,0.85);
-
-    this.hl=Math.random()<.48; // 48%有反光
+             t==='heart_lg'?rand(24,40):
+             t==='star_sm'?rand(4,9):rand(10,19);
+    // 透明度范围大，形成层次感（浅的如远景，深的如近景）
+    this.tAlpha=t.startsWith('heart')||t.startsWith('star')?rand(0.16,0.68):rand(0.18,0.82);
+    this.hl=Math.random()<.48;
     this.up=Math.random()>.45;
-    this.vy=rand(-.48,-1.08);
-    this.vx=rand(-.22,.22);
-    this.rot=rand(-PI*.3,PI*.3);
-    this.rotV=rand(-.007,.007);
-    this.swayA=rand(6,26);
-    this.swayF=rand(.5,1.8);
+    this.vy=rand(-.42,-1.05);
+    this.vx=rand(-.3,.3);
+    this.rot=rand(-PI*.28,PI*.28);
+    this.rotV=rand(-.008,.008);
+    this.swayA=rand(5,22);
+    this.swayF=rand(.5,1.7);
     this.swayP=rand(0,TAU);
     this.alpha=0;
     this.born=F;
-    this.life=rand(420,860);
-    this.fadeT=rand(55,110);
+    this.life=rand(440,850);
+    this.fadeT=rand(55,100);
     this.starRot=rand(0,TAU);
+    this.bouncing=false; // 弹回状态标记
   }
+
   live(){
     const age=F-this.born,life=age/this.life;
     const b=bEnv();
-    if(age<this.fadeT)      this.alpha=lerp(0,this.tAlpha,age/this.fadeT);
-    else if(life>.68)       this.alpha=lerp(this.tAlpha,0,(life-.68)/.32);
-    else                    this.alpha=this.tAlpha;
-    this.x+=this.vx+Math.sin(F*.016*this.swayF+this.swayP)*.25;
+
+    /* ── 透明度：时间渐隐 + 顶部边缘渐隐 ── */
+    let timeFade;
+    if(age<this.fadeT)       timeFade=age/this.fadeT;
+    else if(life>0.68)       timeFade=clamp(1-(life-0.68)/0.32,0,1);
+    else                     timeFade=1;
+    // 顶部5%区域渐隐
+    const topFade=clamp(this.y/(H*.07),0,1);
+    this.alpha=this.tAlpha*timeFade*topFade;
+
+    /* ── 左右边缘弹回（弹性 + 可爱抖动）── */
+    const pad=Math.max(this.sz*1.5, 18);
+    if(this.x<pad){
+      // 弹回：速度取正，加弹力，旋转翻转
+      this.vx=Math.abs(this.vx)*.72+rand(.08,.18);
+      this.x=pad;
+      this.rotV*=-1;           // 反转自转方向
+      this.swayP+=PI;          // 摆动相位翻转
+    } else if(this.x>W-pad){
+      this.vx=-(Math.abs(this.vx)*.72+rand(.08,.18));
+      this.x=W-pad;
+      this.rotV*=-1;
+      this.swayP+=PI;
+    }
+
+    /* ── 位置更新 ── */
+    this.x+=this.vx+Math.sin(F*.016*this.swayF+this.swayP)*.28;
     this.y+=this.vy*(1+b*.18);
     this.rot+=this.rotV;
     this.starRot+=.009;
-    return age<this.life&&this.y>-150;
+
+    /* ── 移除条件：alpha 近于零且超出生命期 ── */
+    return !(this.alpha<0.008 && life>0.68);
   }
+
   draw(){
+    if(this.alpha<0.005)return;
     const b=bEnv(),sc=1+b*.09;
     G.save();
     G.globalAlpha=this.alpha;
@@ -213,52 +207,54 @@ class Elem{
     G.rotate(this.rot);
     G.scale(sc,sc);
     const t=this.type,sz=this.sz;
-    if(t==='quarter') drawQuarter(sz,this.up,this.hl);
-    else if(t==='eighth') drawEighth(sz,this.up,this.hl);
-    else if(t==='half')   drawHalf(sz,this.up,this.hl);
-    else if(t==='beamed') drawBeamed(sz,this.hl);
+    if(t==='quarter')      drawQuarter(sz,this.up,this.hl);
+    else if(t==='eighth')  drawEighth(sz,this.up,this.hl);
+    else if(t==='half')    drawHalf(sz,this.up,this.hl);
+    else if(t==='beamed')  drawBeamed(sz,this.hl);
     else if(t.startsWith('heart')) drawHeart(sz);
-    else{ // star
-      G.rotate(this.starRot);
-      drawStar(sz);
-    }
+    else{G.rotate(this.starRot);drawStar(sz);}
     G.restore();
   }
 }
 
+// 初始数量减少（30个，分布全屏）
 const elems=[];
-for(let i=0;i<42;i++) elems.push(new Elem(true));
+for(let i=0;i<30;i++) elems.push(new Elem(true));
 
-/* ══════════════════════════════════════
-   流水五线谱（一条横带，缓慢摆动）
-   ══════════════════════════════════════ */
-const STAFF_CY=()=>H*.56; // 五线谱中心 Y（随屏幕变化）
-const STAFF_SP=8.5;        // 谱线间距
-const STAFF_ALPHA=0.042;   // 极低透明度
+/* ════════════════════════════════════════
+   流水五线谱（一横带，更大更清晰）
+   ════════════════════════════════════════ */
+const STAFF_SP   = 17;    // 谱线间距（之前8.5，现在翻倍）
+const STAFF_BASE = ()=>H*.54; // 中心位置
+const STAFF_A    = 0.16;  // 透明度（之前0.042，现在4倍）
 
 function drawFlowingStaff(){
   const t=F*.007;
-  // 整体缓慢上下漂浮
-  const bob=Math.sin(t*.38)*5.5+Math.sin(t*.17)*3;
-  const cy0=STAFF_CY()+bob;
+  // 整体上下漂浮（缓慢呼吸感）
+  const bob=Math.sin(t*.35)*7+Math.sin(t*.14)*4;
+  const cy0=STAFF_BASE()+bob;
 
   G.save();
-  G.strokeStyle=`rgba(18,15,10,${STAFF_ALPHA})`;
-  G.lineWidth=1.0;G.lineCap='round';
+  G.lineCap='round';
 
   for(let i=0;i<5;i++){
     const baseY=cy0+(i-2)*STAFF_SP;
-    const ph=i*.55; // 相位错开 → 每条线独立波动
+    const ph=i*.6; // 每条线相位错开
+
+    // 每条谱线透明度略有差异，更自然
+    const la=STAFF_A*(0.82+i*.045);
+    G.strokeStyle=`rgba(18,15,10,${la})`;
+    G.lineWidth=1.3;
 
     G.beginPath();
-    const step=4;
+    const step=3;
     const steps=Math.ceil(W/step);
     for(let s=0;s<=steps;s++){
       const x=s*step;
-      const wy=
-        Math.sin(x*.0095+t*1.1+ph)   *3.2+
-        Math.sin(x*.021 +t*.75+ph*.8)*1.6+
-        Math.sin(x*.041 -t*.55+ph*.4)*.8;
+      // 多频叠加 → 流水感
+      const wy=Math.sin(x*.0088+t*1.05+ph)*4.5
+               +Math.sin(x*.019 +t*.72+ph*.9)*2.2
+               +Math.sin(x*.038 -t*.58+ph*.5)*.9;
       s===0?G.moveTo(x,baseY+wy):G.lineTo(x,baseY+wy);
     }
     G.stroke();
@@ -266,50 +262,52 @@ function drawFlowingStaff(){
   G.restore();
 }
 
-/* ══════════════════════════════════════
-   节拍光晕（极淡）
-   ══════════════════════════════════════ */
+/* ════════════════════════════════════════
+   节拍光晕
+   ════════════════════════════════════════ */
 function drawBeatGlow(){
   const b=bEnv();if(b<.02)return;
-  const r=Math.min(W,H)*.28*b;
+  const r=Math.min(W,H)*.26*b;
   const g=G.createRadialGradient(cx,cy,0,cx,cy,r);
-  g.addColorStop(0,`rgba(10,8,5,${b*.022})`);
+  g.addColorStop(0,`rgba(10,8,5,${b*.020})`);
   g.addColorStop(1,'rgba(255,255,255,0)');
   G.fillStyle=g;G.fillRect(0,0,W,H);
 }
 
-/* ══════════════════════════════════════
-   生成控制
-   ══════════════════════════════════════ */
+/* ════════════════════════════════════════
+   生成控制（减少数量）
+   ════════════════════════════════════════ */
 let spawnT=0;
+const MAX_ELEMS=32;
+const SPAWN_INT=58; // 每58帧生成一个（之前44）
+
 function spawnCtrl(){
   spawnT++;
-  if(spawnT>=44&&elems.length<52){
+  if(spawnT>=SPAWN_INT&&elems.length<MAX_ELEMS){
     elems.push(new Elem(false));spawnT=0;
   }
-  // 节拍触发：少量额外音符
-  if(F%Math.round(BF)<2&&elems.length<58){
+  // 节拍额外生成（节制）
+  if(F%Math.round(BF)<2&&elems.length<MAX_ELEMS+3){
     elems.push(new Elem(false));
   }
 }
 
-/* ══════════════════════════════════════
+/* ════════════════════════════════════════
    主循环
-   ══════════════════════════════════════ */
+   ════════════════════════════════════════ */
 G.fillStyle='#fefefe';G.fillRect(0,0,W,H);
 function loop(){
   requestAnimationFrame(loop);F++;
   G.fillStyle='rgba(254,254,254,.92)';
   G.fillRect(0,0,W,H);
 
-  drawFlowingStaff(); // 五线谱（最底层）
-  drawBeatGlow();     // 节拍光晕
+  drawFlowingStaff();
+  drawBeatGlow();
 
-  // 浮动元素
   for(let i=elems.length-1;i>=0;i--){
     const ok=elems[i].live();
     elems[i].draw();
-    if(!ok) elems.splice(i,1);
+    if(!ok)elems.splice(i,1);
   }
   spawnCtrl();
 }
