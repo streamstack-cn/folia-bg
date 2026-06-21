@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Folia BG v2 — Resonance Field</title>
+<style>
+*{margin:0;padding:0;}
+html,body{width:100%;height:100%;overflow:hidden;background:#fff;}
+canvas{position:fixed;inset:0;width:100%;height:100%;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+const CV=document.getElementById('c');
+const G=CV.getContext('2d');
+let W,H,cx,cy;
+function resize(){
+  W=CV.width=innerWidth; H=CV.height=innerHeight; cx=W/2; cy=H/2;
+}
+resize(); addEventListener('resize',resize);
+
+const PI=Math.PI, TAU=PI*2;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const rand=(a,b)=>a+Math.random()*(b-a);
+
+/* ── Beat ── */
+let F=0;
+const BPM=72, BEAT_F=60*60/BPM;
+function bEnv(){
+  return Math.pow(clamp(1-(F%BEAT_F)/BEAT_F*2.4,0,1),2.5);
+}
+
+/* ── Wave ── */
+function wv(x,z){
+  const t=F*0.013, b=bEnv();
+  return (1+b*0.45)*(
+    Math.sin(x*.018+t*.72)*1.0+
+    Math.sin(z*.013+t*.58)*0.9+
+    Math.sin((x-z)*.010+t*.98)*0.7+
+    Math.sin(x*.032-t*1.35)*0.35+
+    Math.sin(z*.026+t*.82)*0.35
+  );
+}
+
+/* ── 3D Projection ──
+   Camera: (0, CAM_H, 0), looking along +Z downward at floor.
+   Floor: Y=0. Ceiling: Y=CEIL_H.
+   proj() → screen coords.
+*/
+const CAM_H=180, Z_NEAR=200, Z_FAR=2800, X_HALF=1400;
+const CEIL_H=355; // world units (ceiling above camera)
+
+const vpy=()=>H*0.42; // vanishing point Y on screen (horizon)
+const nearY=()=>H*0.956;
+const fov=()=>Z_NEAR*(nearY()-vpy())/CAM_H;
+
+function proj(wx,wy,wz){
+  if(wz<1) return null;
+  const f=fov(), s=f/wz;
+  return { sx:cx+wx*s, sy:vpy()+(CAM_H-wy)*s, s };
+}
+
+/* ── Grid ── */
+const ROWS=38, COLS=50;
+const WAVE_AMP=20; // world units
+
+function gpt(r,c){
+  const t=r/(ROWS-1);
+  const wz=Z_NEAR+(Z_FAR-Z_NEAR)*t;
+  const wx=((c/(COLS-1))-.5)*2*X_HALF;
+  const wy=wv(wx*.015,wz*.008)*WAVE_AMP*(1-t*.65);
+  return proj(wx,wy,wz);
+}
+
+function drawGrid(flip){
+  const b=bEnv();
+  G.save();
+  if(flip){ G.translate(0,2*vpy()); G.scale(1,-1); }
+
+  for(let r=ROWS-1;r>=0;r--){
+    const near=1-r/(ROWS-1);
+    const alpha=clamp((near*near*.22+.025)*(1+b*.15),0,.99);
+    G.beginPath();
+    G.strokeStyle=`rgba(10,8,5,${alpha})`;
+    G.lineWidth=.4+near*.9;
+    let first=true;
+    for(let c=0;c<COLS;c++){
+      const p=gpt(r,c); if(!p) continue;
+      first?G.moveTo(p.sx,p.sy):G.lineTo(p.sx,p.sy); first=false;
+    }
+    G.stroke();
+  }
+  for(let c=0;c<COLS;c+=2){
+    G.beginPath();
+    let first=true;
+    for(let r=ROWS-1;r>=0;r--){
+      const p=gpt(r,c); if(!p) continue;
+      first?G.moveTo(p.sx,p.sy):G.lineTo(p.sx,p.sy); first=false;
+    }
+    G.strokeStyle='rgba(10,8,5,0.055)'; G.lineWidth=.4; G.stroke();
+  }
+  G.restore();
+}
+
+/* ── Wall Lines ── */
+function drawWalls(){
+  const b=bEnv(), VY=vpy();
+  const sides=[-1,1];
+  const yPositions=[.03,.18,.36,.55,.72,.88,.97];
+  for(const side of sides){
+    for(const yf of yPositions){
+      const edgeX=side*(W*.5+4), edgeY=H*yf;
+      const a=.03+.03*(1-Math.abs(yf-.5)*1.8)*(1+b*.1);
+      G.beginPath();
+      G.moveTo(edgeX,edgeY); G.lineTo(cx,VY);
+      G.strokeStyle=`rgba(10,8,5,${clamp(a,0,.1)})`; G.lineWidth=.4; G.stroke();
+    }
+  }
+}
+
+/* ── Sphere ── */
+const SC=[0,126,680]; // center world (x,y,z)
+const SR=88;
+const LAT=15, LON=20;
+let rotY=0, rotX=.12;
+
+function spt(lat,lon){
+  const R=SR+wv(lat*55,lon*55)*3.5;
+  const b=bEnv(), Rs=R*(1+b*.13);
+  let lx=Rs*Math.cos(lat)*Math.cos(lon);
+  let ly=Rs*Math.sin(lat);
+  let lz=Rs*Math.cos(lat)*Math.sin(lon);
+  const cy2=Math.cos(rotY),sy2=Math.sin(rotY);
+  const rx=lx*cy2+lz*sy2, rz2=-lx*sy2+lz*cy2; lx=rx; lz=rz2;
+  const cx2=Math.cos(rotX),sx2=Math.sin(rotX);
+  const ry=ly*cx2-lz*sx2, rz3=ly*sx2+lz*cx2;
+  return proj(SC[0]+lx,SC[1]+ry,SC[2]+rz3);
+}
+
+function drawSphere(){
+  rotY+=.0035;
+  const b=bEnv(), baseA=.16+b*.09;
+  // latitude circles
+  for(let i=1;i<LAT;i++){
+    const lat=-PI/2+PI*i/LAT;
+    const pts=[];
+    for(let j=0;j<=LON;j++){ const p=spt(lat,TAU*j/LON); if(p) pts.push(p); }
+    if(pts.length<2) continue;
+    G.beginPath(); G.moveTo(pts[0].sx,pts[0].sy);
+    for(let k=1;k<pts.length;k++) G.lineTo(pts[k].sx,pts[k].sy);
+    G.strokeStyle=`rgba(10,8,5,${baseA})`; G.lineWidth=.75; G.stroke();
+  }
+  // longitude circles
+  for(let j=0;j<LON;j+=2){
+    const pts=[];
+    for(let i=0;i<=LAT;i++){ const p=spt(-PI/2+PI*i/LAT,TAU*j/LON); if(p) pts.push(p); }
+    if(pts.length<2) continue;
+    G.beginPath(); G.moveTo(pts[0].sx,pts[0].sy);
+    for(let k=1;k<pts.length;k++) G.lineTo(pts[k].sx,pts[k].sy);
+    G.strokeStyle=`rgba(10,8,5,${baseA*.75})`; G.lineWidth=.6; G.stroke();
+  }
+}
+
+/* ── Beat Ripples (on floor plane, perspective-correct) ── */
+const ripples=[];
+let lastBF=0;
+function drawRipples(){
+  if(F-lastBF>=BEAT_F){ ripples.push({r:10,alpha:.18,spd:14}); lastBF=F; }
+  for(let i=ripples.length-1;i>=0;i--){
+    const rp=ripples[i]; rp.r+=rp.spd; rp.alpha*=.975;
+    if(rp.alpha<.003){ ripples.splice(i,1); continue; }
+    const N=72;
+    G.beginPath(); let first=true;
+    for(let k=0;k<=N;k++){
+      const a=TAU*k/N;
+      const p=proj(SC[0]+Math.cos(a)*rp.r, 0, SC[2]+Math.sin(a)*rp.r);
+      if(!p) continue;
+      first?G.moveTo(p.sx,p.sy):G.lineTo(p.sx,p.sy); first=false;
+    }
+    G.strokeStyle=`rgba(10,8,5,${rp.alpha})`; G.lineWidth=.9; G.stroke();
+  }
+}
+
+/* ── Wave Ribbons through sphere depth ── */
+function drawRibbons(){
+  const b=bEnv();
+  const ribbonConfigs=[
+    {z:SC[2], halfW:800, amp:22, speed:1.0, alpha:.18+b*.07, lw:.85},
+    {z:SC[2], halfW:700, amp:14, speed:1.5, alpha:.08+b*.04, lw:.55},
+    {z:SC[2]-120, halfW:600, amp:10, speed:.8, alpha:.05+b*.03, lw:.45},
+  ];
+  for(const cfg of ribbonConfigs){
+    G.beginPath(); let first=true;
+    const N=110;
+    for(let i=0;i<=N;i++){
+      const u=(i/N-.5)*2, wx=u*cfg.halfW;
+      const t=F*cfg.speed*.012;
+      const wy=SC[1]
+        +Math.sin(u*PI*3.5+t)*cfg.amp
+        +Math.sin(u*PI*7.2-t*.8)*cfg.amp*.4
+        +wv(wx*.015,cfg.z*.008)*cfg.amp*.35;
+      const p=proj(wx,wy,cfg.z); if(!p) continue;
+      first?G.moveTo(p.sx,p.sy):G.lineTo(p.sx,p.sy); first=false;
+    }
+    G.strokeStyle=`rgba(10,8,5,${cfg.alpha})`; G.lineWidth=cfg.lw; G.stroke();
+  }
+}
+
+/* ── 3D Vertical Columns ── */
+const colXs=[-520,-300,-100,0,100,300,520,-700,700];
+function drawColumns(){
+  const b=bEnv();
+  for(let i=0;i<colXs.length;i++){
+    const wx=colXs[i], wz=SC[2]+rand(-60,60); // small jitter per init
+    const h=(Math.abs(wv(wx*.02,wz*.015))*0.75+0.12)*130*(1+b*.45);
+    const base=proj(wx,0,wz), top=proj(wx,h,wz);
+    if(!base||!top) continue;
+    const a=.06+Math.abs(wv(wx*.02,wz*.015))*.10+b*.04;
+    // Column line
+    G.beginPath(); G.moveTo(base.sx,base.sy); G.lineTo(top.sx,top.sy);
+    G.strokeStyle=`rgba(10,8,5,${a})`; G.lineWidth=base.s*2.5; G.stroke();
+    // Dot cap
+    G.beginPath(); G.arc(top.sx,top.sy,top.s*3.5,0,TAU);
+    G.fillStyle=`rgba(10,8,5,${a*1.4})`; G.fill();
+  }
+}
+
+/* ── Central glow pulse ── */
+function drawGlow(){
+  const b=bEnv();
+  const sp=proj(SC[0],SC[1],SC[2]); if(!sp) return;
+  const r=(100+b*55)*sp.s;
+  const grad=G.createRadialGradient(sp.sx,sp.sy,0,sp.sx,sp.sy,r*3.5);
+  grad.addColorStop(0,`rgba(0,0,0,${.05+b*.04})`);
+  grad.addColorStop(1,'rgba(255,255,255,0)');
+  G.fillStyle=grad; G.fillRect(0,0,W,H);
+}
+
+/* ── 3D Particles ── */
+const NP=120;
+const parts=Array.from({length:NP},()=>({
+  wx:rand(-700,700), wy:rand(SC[1]*.4,SC[1]*2.5), wz:rand(300,1600),
+  vx:rand(-.35,.35), vy:rand(-.18,.18),
+  sz:rand(.7,2.2), a:rand(.035,.12),
+  age:rand(0,500), life:rand(280,560)
+}));
+function drawParticles(){
+  for(const p of parts){
+    p.age++; p.wx+=p.vx; p.wy+=p.vy+wv(p.wx*.012,p.wz*.01)*.04;
+    if(p.age>p.life){
+      p.wx=rand(-700,700); p.wy=rand(SC[1]*.4,SC[1]*2.5);
+      p.wz=rand(300,1600); p.age=0; p.life=rand(280,560);
+    }
+    const pr=proj(p.wx,p.wy,p.wz); if(!pr) continue;
+    const fade=Math.sin(p.age/p.life*PI);
+    G.beginPath(); G.arc(pr.sx,pr.sy,p.sz*pr.s*.38,0,TAU);
+    G.fillStyle=`rgba(10,8,5,${p.a*fade})`; G.fill();
+  }
+}
+
+/* ── Background radial haze ── */
+function drawHaze(){
+  const vp=vpy();
+  const grad=G.createRadialGradient(cx,vp,0,cx,vp,Math.max(W,H)*.72);
+  grad.addColorStop(0,'rgba(240,238,234,0.55)');
+  grad.addColorStop(1,'rgba(255,255,255,0)');
+  G.fillStyle=grad; G.fillRect(0,0,W,H);
+}
+
+/* ── MAIN LOOP ── */
+G.fillStyle='#fff'; G.fillRect(0,0,W,H);
+
+// Pre-seed column Z values (avoid rand() in draw)
+const colZs=colXs.map(()=>SC[2]+rand(-80,80));
+function drawColumnsFixed(){
+  const b=bEnv();
+  for(let i=0;i<colXs.length;i++){
+    const wx=colXs[i], wz=colZs[i];
+    const h=(Math.abs(wv(wx*.02,wz*.015))*0.75+0.12)*130*(1+b*.45);
+    const base=proj(wx,0,wz), top=proj(wx,h,wz);
+    if(!base||!top) continue;
+    const a=.06+Math.abs(wv(wx*.02,wz*.015))*.10+b*.04;
+    G.beginPath(); G.moveTo(base.sx,base.sy); G.lineTo(top.sx,top.sy);
+    G.strokeStyle=`rgba(10,8,5,${a})`; G.lineWidth=base.s*2.5; G.stroke();
+    G.beginPath(); G.arc(top.sx,top.sy,top.s*3.5,0,TAU);
+    G.fillStyle=`rgba(10,8,5,${a*1.4})`; G.fill();
+  }
+}
+
+function loop(){
+  requestAnimationFrame(loop);
+  F++;
+
+  // Pure white clear
+  G.fillStyle='rgba(255,255,255,.91)';
+  G.fillRect(0,0,W,H);
+
+  drawHaze();
+  drawWalls();
+  drawGrid(false);   // floor
+  drawGrid(true);    // ceiling (mirrored)
+  drawRipples();
+  drawColumnsFixed();
+  drawRibbons();
+  drawGlow();
+  drawSphere();
+  drawParticles();
+}
+loop();
+</script>
+</body>
+</html>
