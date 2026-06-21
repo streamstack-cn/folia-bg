@@ -2,9 +2,9 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>Folia BG — Naked Eye 3D Garden</title>
+<title>Folia BG — 3D Floating Notes</title>
 <style>
-*{margin:0;padding:0;}
+*{margin:0;padding:0;box-sizing:border-box;}
 html,body{width:100%;height:100%;overflow:hidden;background:#fefefe;}
 canvas{position:fixed;inset:0;width:100%;height:100%;}
 </style>
@@ -24,305 +24,315 @@ const rand=(a,b)=>a+Math.random()*(b-a);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
 
-/* ── 节拍 78BPM ── */
 let F=0;
-const BPM=78,BF=60*60/BPM;
-function bEnv(){return Math.pow(clamp(1-(F%BF)/BF*2.3,0,1),2.8);}
 
-/* ════════════════════════════════════════════════
-   3D 绘制原语（粘土/气泡质感）
-   ════════════════════════════════════════════════ */
+/* ══════════════════════════════════════
+   3D 风格绘制函数
+   ══════════════════════════════════════ */
 
-const DARK ='rgb(20,16,11)';
-const cDome=(a)=>`rgba(65,52,36,${a})`;
-const cSpec=(a)=>`rgba(255,255,255,${a})`;
-const cShad=(a)=>`rgba(0,0,0,${a})`;
+// 生成具有 3D 质感的渐变（塑料光泽/气球质感）
+function get3DGradient(x, y, r, baseColor, alpha) {
+  // baseColor 类似 '30,25,20'
+  const grad = G.createRadialGradient(x - r*0.3, y - r*0.3, r*0.1, x, y, r*1.2);
+  grad.addColorStop(0, `rgba(255,255,255,${alpha})`); // 高光
+  grad.addColorStop(0.2, `rgba(120,110,100,${alpha})`); // 过渡
+  grad.addColorStop(0.6, `rgba(${baseColor},${alpha})`); // 本色
+  grad.addColorStop(1, `rgba(0,0,0,${alpha})`); // 暗部边缘
+  return grad;
+}
 
-function head3D(sz){
-  G.save();G.rotate(-.32);
-  G.beginPath();G.ellipse(sz*.14,sz*.22,sz*.60,sz*.46,0,0,TAU);
-  G.fillStyle=cShad(.13);G.fill();
-  G.beginPath();G.ellipse(0,0,sz*.60,sz*.46,0,0,TAU);
-  G.fillStyle=DARK;G.fill();
-  G.beginPath();G.ellipse(-sz*.11,-sz*.10,sz*.37,sz*.27,0,0,TAU);
-  G.fillStyle=cDome(.56);G.fill();
-  G.beginPath();G.ellipse(-sz*.22,-sz*.16,sz*.17,sz*.10,.28,0,TAU);
-  G.fillStyle=cSpec(.66);G.fill();
+// 3D 椭圆音符头
+function noteHead3D(sz, alpha, hollow=false){
+  G.save(); G.rotate(-.36);
+  G.beginPath(); G.ellipse(0,0,sz*.57,sz*.42,0,0,TAU);
+  if(!hollow){
+    G.fillStyle = get3DGradient(0, 0, sz*.6, '30,25,20', alpha);
+    G.fill();
+  } else {
+    // 二分音符空心圈（环形 3D 感）
+    G.lineWidth = sz*.18;
+    // 使用径向渐变作为笔触，模拟圆环的体积感
+    const r = sz * 0.6;
+    const grad = G.createLinearGradient(-r, -r, r, r);
+    grad.addColorStop(0, `rgba(200,200,200,${alpha})`);
+    grad.addColorStop(0.5, `rgba(30,25,20,${alpha})`);
+    grad.addColorStop(1, `rgba(0,0,0,${alpha})`);
+    G.strokeStyle = grad;
+    G.stroke();
+  }
   G.restore();
 }
 
-function headHollow3D(sz){
-  G.save();G.rotate(-.32);
-  G.beginPath();G.ellipse(sz*.13,sz*.20,sz*.62,sz*.48,0,0,TAU);
-  G.fillStyle='rgba(255,255,255,.9)';G.fill();
-  G.strokeStyle=cShad(.12);G.lineWidth=sz*.18;G.stroke();
-  G.beginPath();G.ellipse(0,0,sz*.60,sz*.46,0,0,TAU);
-  G.fillStyle='rgba(255,255,255,.96)';G.fill();
-  G.strokeStyle=DARK;G.lineWidth=sz*.15;G.stroke();
-  G.beginPath();G.ellipse(sz*.07,sz*.07,sz*.30,sz*.22,0,0,TAU);
-  G.fillStyle='rgba(20,16,11,.11)';G.fill();
-  G.beginPath();G.ellipse(-sz*.25,-sz*.14,sz*.12,sz*.07,.3,0,TAU);
-  G.fillStyle=cSpec(.58);G.fill();
-  G.restore();
+// 3D 柱状茎
+function stem3D(sz, up, alpha){
+  const sx=sz*.44, sy=up?-sz*.08:sz*.08, ey=up?-sz*2.85:sz*2.85;
+  G.beginPath(); G.moveTo(sx,sy); G.lineTo(sx,ey);
+  
+  // 线性渐变模拟圆柱体
+  const grad = G.createLinearGradient(sx - sz*.08, 0, sx + sz*.08, 0);
+  grad.addColorStop(0, `rgba(0,0,0,${alpha})`);
+  grad.addColorStop(0.3, `rgba(100,90,80,${alpha})`);
+  grad.addColorStop(0.5, `rgba(255,255,255,${alpha})`);
+  grad.addColorStop(0.7, `rgba(30,25,20,${alpha})`);
+  grad.addColorStop(1, `rgba(0,0,0,${alpha})`);
+
+  G.strokeStyle = grad; 
+  G.lineWidth=sz*.16; G.lineCap='round'; G.stroke();
 }
 
-function stem3D(sz,up=true){
-  const sx=sz*.46,sy=up?-sz*.10:sz*.10,ey=up?-sz*2.90:sz*2.90,w=sz*.17;
-  G.beginPath();G.moveTo(sx+sz*.10,sy+sz*.10);G.lineTo(sx+sz*.10,ey+sz*.10);
-  G.strokeStyle=cShad(.13);G.lineWidth=w*1.35;G.lineCap='round';G.stroke();
-  G.beginPath();G.moveTo(sx,sy);G.lineTo(sx,ey);
-  G.strokeStyle=DARK;G.lineWidth=w;G.stroke();
-  G.beginPath();G.moveTo(sx-w*.35,sy);G.lineTo(sx-w*.35,ey);
-  G.strokeStyle=cDome(.44);G.lineWidth=w*.28;G.stroke();
+// 3D 小旗（八分音符）
+function flag3D(sz, up, alpha){
+  const sx=sz*.44, top=up?-sz*2.85:sz*2.85, d=up?1:-1;
+  G.beginPath(); G.moveTo(sx,top);
+  G.bezierCurveTo(sx+sz*1.25, top+sz*d*.52, sx+sz*1.1, top+sz*d*1.28, sx+sz*.12, top+sz*d*1.7);
+  
+  const grad = G.createLinearGradient(sx, top, sx+sz*1.25, top+sz*d*1.7);
+  grad.addColorStop(0, `rgba(80,70,60,${alpha})`);
+  grad.addColorStop(0.5, `rgba(30,25,20,${alpha})`);
+  grad.addColorStop(1, `rgba(0,0,0,${alpha})`);
+
+  G.strokeStyle=grad; G.lineWidth=sz*.15; G.lineCap='round'; G.stroke();
 }
 
-function flag3D(sz,up=true){
-  const sx=sz*.46,top=up?-sz*2.90:sz*2.90,d=up?1:-1;
-  const c=[sx+sz*1.28,top+sz*d*.52,sx+sz*1.08,top+sz*d*1.28,sx+sz*.12,top+sz*d*1.72];
-  G.lineCap='round';
-  G.beginPath();G.moveTo(sx+sz*.10,top+sz*.10);
-  G.bezierCurveTo(c[0]+sz*.10,c[1]+sz*.10,c[2]+sz*.10,c[3]+sz*.10,c[4]+sz*.10,c[5]+sz*.10);
-  G.strokeStyle=cShad(.12);G.lineWidth=sz*.18;G.stroke();
-  G.beginPath();G.moveTo(sx,top);G.bezierCurveTo(...c);
-  G.strokeStyle=DARK;G.lineWidth=sz*.15;G.stroke();
+// 3D 横梁（连音）
+function beam3D(sz, gap, alpha){
+  const sx=sz*.44, ex=gap+sz*.44, ty=-sz*3.08;
+  G.beginPath(); G.moveTo(sx,ty); G.lineTo(ex,ty);
+  
+  const grad = G.createLinearGradient(0, ty - sz*.2, 0, ty + sz*.2);
+  grad.addColorStop(0, `rgba(100,90,80,${alpha})`);
+  grad.addColorStop(0.3, `rgba(255,255,255,${alpha})`);
+  grad.addColorStop(0.6, `rgba(30,25,20,${alpha})`);
+  grad.addColorStop(1, `rgba(0,0,0,${alpha})`);
+
+  G.strokeStyle=grad; G.lineWidth=sz*.4; G.lineCap='round'; G.stroke();
 }
 
-function beam3D(sz,gap){
-  const sx=sz*.46,ex=gap+sz*.46,ty=-sz*2.90,w=sz*.42;
-  G.beginPath();G.moveTo(sx+sz*.10,ty+sz*.14);G.lineTo(ex+sz*.10,ty+sz*.14);
-  G.strokeStyle=cShad(.14);G.lineWidth=w*1.28;G.lineCap='square';G.stroke();
-  G.beginPath();G.moveTo(sx,ty);G.lineTo(ex,ty);
-  G.strokeStyle=DARK;G.lineWidth=w;G.stroke();
-  G.beginPath();G.moveTo(sx,ty-w*.27);G.lineTo(ex,ty-w*.27);
-  G.strokeStyle=cDome(.42);G.lineWidth=w*.22;G.stroke();
+// 组合音符
+function drawQuarter3D(sz, up, alpha){
+  noteHead3D(sz, alpha, false); stem3D(sz, up, alpha);
 }
-
-function drawQ3D(sz,up){head3D(sz);stem3D(sz,up);}
-function drawH3D(sz,up){headHollow3D(sz);stem3D(sz,up);}
-function drawE3D(sz,up){head3D(sz);stem3D(sz,up);flag3D(sz,up);}
-function drawB3D(sz){
+function drawHalf3D(sz, up, alpha){
+  noteHead3D(sz, alpha, true); stem3D(sz, up, alpha);
+}
+function drawEighth3D(sz, up, alpha){
+  noteHead3D(sz, alpha, false); stem3D(sz, up, alpha); flag3D(sz, up, alpha);
+}
+function drawBeamed3D(sz, alpha){
   const gap=sz*2.3;
-  head3D(sz);
-  G.save();G.translate(gap,0);head3D(sz);G.restore();
-  [0,gap].forEach(dx=>{
-    G.lineCap='round';
-    G.beginPath();G.moveTo(dx+sz*.46+sz*.10,-sz*.10+sz*.10);G.lineTo(dx+sz*.46+sz*.10,-sz*2.90+sz*.10);
-    G.strokeStyle=cShad(.13);G.lineWidth=sz*.22;G.stroke();
-    G.beginPath();G.moveTo(dx+sz*.46,-sz*.10);G.lineTo(dx+sz*.46,-sz*2.90);
-    G.strokeStyle=DARK;G.lineWidth=sz*.17;G.stroke();
-    G.beginPath();G.moveTo(dx+sz*.46-sz*.06,-sz*.10);G.lineTo(dx+sz*.46-sz*.06,-sz*2.90);
-    G.strokeStyle=cDome(.42);G.lineWidth=sz*.05;G.stroke();
-  });
-  beam3D(sz,gap);
+  noteHead3D(sz, alpha, false);
+  G.save(); G.translate(gap,0); noteHead3D(sz, alpha, false); G.restore();
+  stem3D(sz, true, alpha);
+  G.save(); G.translate(gap,0); stem3D(sz, true, alpha); G.restore();
+  beam3D(sz, gap, alpha);
 }
 
-function drawHeart3D(sz){
-  G.save();G.scale(sz/16,sz/16);
-  function hp(ox=0,oy=0){
-    G.beginPath();G.moveTo(ox,oy+5);
-    G.bezierCurveTo(ox-8,oy-2,ox-16,oy+6,ox-16,oy+12);
-    G.bezierCurveTo(ox-16,oy+21,ox,oy+30,ox,oy+30);
-    G.bezierCurveTo(ox,oy+30,ox+16,oy+21,ox+16,oy+12);
-    G.bezierCurveTo(ox+16,oy+6,ox+8,oy-2,ox,oy+5);G.closePath();
-  }
-  hp(2,3);G.fillStyle=cShad(.13);G.fill();
-  hp();   G.fillStyle=DARK;G.fill();
-  G.beginPath();G.ellipse(-5,4,7.5,5.5,-.3,0,TAU);
-  G.fillStyle=cDome(.52);G.fill();
-  G.beginPath();G.ellipse(-7.5,0,4.8,3,-.4,0,TAU);
-  G.fillStyle=cSpec(.64);G.fill();
+// 3D 爱心
+function drawHeart3D(sz, alpha){
+  G.save(); G.scale(sz/16, sz/16);
+  G.beginPath();
+  G.moveTo(0,5);
+  G.bezierCurveTo(-8,-2,-16,6,-16,12);
+  G.bezierCurveTo(-16,21,0,29,0,29);
+  G.bezierCurveTo(0,29,16,21,16,12);
+  G.bezierCurveTo(16,6,8,-2,0,5);
+  G.closePath();
+  
+  // 立体红色材质
+  const grad = G.createRadialGradient(-4, 4, 1, 0, 10, 20);
+  grad.addColorStop(0, `rgba(255,150,150,${alpha})`);
+  grad.addColorStop(0.2, `rgba(220,50,50,${alpha})`);
+  grad.addColorStop(0.7, `rgba(120,10,10,${alpha})`);
+  grad.addColorStop(1, `rgba(40,0,0,${alpha})`);
+
+  G.fillStyle=grad; G.fill();
   G.restore();
 }
 
-function drawStar3D(sz){
-  const r1=sz,r2=sz*.38;
-  function sp(ox=0,oy=0){
-    G.beginPath();
-    for(let i=0;i<8;i++){
-      const a=i/8*TAU-PI/2,r=i%2===0?r1:r2;
-      i===0?G.moveTo(ox+Math.cos(a)*r,oy+Math.sin(a)*r)
-           :G.lineTo(ox+Math.cos(a)*r,oy+Math.sin(a)*r);
-    }G.closePath();
+// 3D 星星（圆润膨胀感）
+function drawStar3D(sz, alpha){
+  G.save();
+  const r1=sz, r2=sz*.45;
+  G.beginPath();
+  for(let i=0;i<8;i++){
+    const a=i/8*TAU-PI/2, r=i%2===0?r1:r2;
+    // 使用二次贝塞尔曲线让星星看起来更圆润，像充气气球
+    const nextA = ((i+1)%8)/8*TAU-PI/2;
+    const nextR = (i+1)%2===0?r1:r2;
+    const cpX = Math.cos((a+nextA)/2) * ((r+nextR)/2 * 0.8);
+    const cpY = Math.sin((a+nextA)/2) * ((r+nextR)/2 * 0.8);
+    
+    if(i===0) G.moveTo(Math.cos(a)*r, Math.sin(a)*r);
+    G.quadraticCurveTo(cpX, cpY, Math.cos(nextA)*nextR, Math.sin(nextA)*nextR);
   }
-  sp(sz*.14,sz*.22);G.fillStyle=cShad(.12);G.fill();
-  sp();              G.fillStyle=DARK;G.fill();
-  G.beginPath();G.arc(-sz*.10,-sz*.10,sz*.34,0,TAU);
-  G.fillStyle=cDome(.48);G.fill();
-  G.beginPath();G.arc(-sz*.22,-sz*.24,sz*.13,0,TAU);
-  G.fillStyle=cSpec(.62);G.fill();
+  G.closePath();
+  
+  // 立体金色材质
+  const grad = G.createRadialGradient(-sz*.2, -sz*.2, sz*.05, 0, 0, sz);
+  grad.addColorStop(0, `rgba(255,255,200,${alpha})`);
+  grad.addColorStop(0.3, `rgba(255,200,50,${alpha})`);
+  grad.addColorStop(0.8, `rgba(150,100,10,${alpha})`);
+  grad.addColorStop(1, `rgba(50,30,0,${alpha})`);
+
+  G.fillStyle=grad; G.fill();
+  G.restore();
 }
 
-/* ════════════════════════════════════════════════
-   3D 空间与粒子系统
-   ════════════════════════════════════════════════ */
-
-const FOV = 600; // 视距（摄像机焦距），决定透视畸变程度
-
-const POOL=[
-  {t:'Q',w:7},{t:'E',w:7},{t:'H',w:4},{t:'B',w:6},
-  {t:'hs',w:3},{t:'hm',w:4},{t:'hl',w:2},
-  {t:'ss',w:3},{t:'sm',w:2},
-];
-const PT=POOL.reduce((s,p)=>s+p.w,0);
-function pickT(){let r=rand(0,PT);for(const p of POOL){if(r<p.w)return p.t;r-=p.w;}return'Q';}
+/* ══════════════════════════════════════
+   浮动元素 Particle
+   ══════════════════════════════════════ */
+const POOL=['quarter','eighth','half','beamed','heart','star'];
 
 class Elem{
   constructor(init=false){this.reset(init);}
   reset(init=false){
-    const t=this.t=pickT();
-    // 真3D坐标
-    this.z = init ? rand(0, 1500) : rand(1200, 1600); // z大表示在屏幕深处
-    this.x = rand(-W*0.6, W*0.6); // 3D空间X宽于屏幕，以便部分元素从侧边飞出
-    this.y = rand(H*0.1, H*0.8);  // 3D空间Y
-
-    this.sz=t==='Q'||t==='E'||t==='H'?rand(11,23):
-             t==='B'?rand(9,15):
-             t==='hs'?rand(5,10):t==='hm'?rand(12,20):t==='hl'?rand(22,38):
-             t==='ss'?rand(4,8):rand(10,17);
-
-    // 基准大小放大，因为在远处会变小
-    this.sz *= 1.5;
-
-    this.tA=(t==='hs'||t==='hm'||t==='hl'||t==='ss'||t==='sm')?rand(.28,.78):rand(.30,.92);
-    this.up=Math.random()>.45;
+    this.type = POOL[Math.floor(rand(0, POOL.length))];
     
-    // 3D速度向量：主要是向外飞(vz<0)并向上飘(vy<0)
-    this.vz = rand(-1.2, -3.5); 
-    this.vy = rand(-0.4, -1.2);
-    this.vx = rand(-0.8, 0.8);
+    // 尺寸差异化
+    if(this.type === 'heart' || this.type === 'star') {
+        this.sz = rand(10, 35); // 大小分布更广
+    } else {
+        this.sz = rand(12, 28);
+    }
+
+    this.x = rand(this.sz * 2, W - this.sz * 2);
+    this.y = init ? rand(H*.1, H*.9) : H + rand(20, 80);
+
+    // 透明度层次
+    this.tAlpha = rand(0.3, 0.95);
+
+    this.up = Math.random() > .5;
+    this.vy = rand(-1.2, -2.5); // 上浮速度
+    this.vx = rand(-1.5, 1.5);  // 水平速度，用于回弹
     
-    this.rot=rand(-PI*.28,PI*.28);this.rotV=rand(-.007,.007);
-    this.swF=rand(.5,1.7);this.swP=rand(0,TAU);
-    this.a=0;this.born=F;this.life=rand(440,850);this.fadeT=rand(30,60);
-    this.sRot=rand(0,TAU);
-    this.scale = 1;
+    // 旋转
+    this.rot = rand(-PI*.2, PI*.2);
+    this.rotV = rand(-.02, .02);
+    
+    // 飘动 (左右微微摇摆)
+    this.swayF = rand(.5, 1.5);
+    this.swayP = rand(0, TAU);
+
+    this.alpha = 0;
+    this.born = F;
+    this.life = rand(500, 1000);
+    this.fadeT = rand(30, 60);
   }
   
   live(){
-    const age=F-this.born, life=age/this.life, b=bEnv();
-    let tf=age<this.fadeT?age/this.fadeT:life>.75?clamp(1-(life-.75)/.25,0,1):1;
+    const age = F - this.born;
+    const lifeRatio = age / this.life;
     
-    // 根据Z深度添加雾化/景深效果（越远越透明）
-    const depthAlpha = clamp(1 - (this.z / 1800), 0.1, 1);
-    this.a = this.tA * tf * depthAlpha;
+    if(age < this.fadeT) this.alpha = lerp(0, this.tAlpha, age/this.fadeT);
+    else if(lifeRatio > .8) this.alpha = lerp(this.tAlpha, 0, (lifeRatio-.8)/.2);
+    else this.alpha = this.tAlpha;
 
-    // 物理位置更新
-    this.x += this.vx + Math.sin(F*.016*this.swF+this.swP)*1.5;
-    this.y += this.vy * (1+b*.18);
-    this.z += this.vz * (1+b*.1);
+    // 运动学：结合基础 vx 和正弦摇摆
+    let currentVx = this.vx + Math.sin(F*.01 * this.swayF + this.swayP) * 0.5;
+    this.x += currentVx;
+    this.y += this.vy;
+    this.rot += this.rotV;
 
-    // 透视投影
-    if(this.z <= -FOV + 10) return false; // 越过相机，销毁
-    this.scale = FOV / (FOV + this.z);
-    this.px = cx + this.x * this.scale;
-    this.py = cy + (this.y - H/2) * this.scale; // Y轴中心对齐视平线
-
-    // 屏幕边缘弹回 (基于投影后坐标px)
-    const pad = this.sz * this.scale * 1.5;
-    if(this.px < pad && this.vx < 0) {
-      this.vx = Math.abs(this.vx)*0.8 + 0.2;
-      this.rotV *= -1; this.swP += PI;
-    } else if(this.px > W-pad && this.vx > 0) {
-      this.vx = -Math.abs(this.vx)*0.8 - 0.2;
-      this.rotV *= -1; this.swP += PI;
+    // 边缘回弹逻辑
+    const margin = this.sz * 1.5;
+    if (this.x < margin) {
+        this.x = margin;
+        this.vx = Math.abs(this.vx); // 向右弹
+    } else if (this.x > W - margin) {
+        this.x = W - margin;
+        this.vx = -Math.abs(this.vx); // 向左弹
     }
 
-    this.rot+=this.rotV;this.sRot+=.009;
-    return !(this.a<0.008&&life>.75) && this.py > -200; // 飞出屏幕太高也销毁
+    return age < this.life && this.y > -100 && this.alpha > 0.001;
   }
   
   draw(){
-    if(this.a<0.005)return;
-    const b=bEnv(), beatScale=1+b*.09;
     G.save();
-    G.globalAlpha=this.a;
-    // 使用透视投影后的坐标和缩放
-    G.translate(this.px, this.py);
+    G.translate(this.x, this.y);
     G.rotate(this.rot);
-    G.scale(this.scale * beatScale, this.scale * beatScale);
     
-    const t=this.t, sz=this.sz;
-    if(t==='Q')      drawQ3D(sz,this.up);
-    else if(t==='E') drawE3D(sz,this.up);
-    else if(t==='H') drawH3D(sz,this.up);
-    else if(t==='B') drawB3D(sz);
-    else if(t==='hs'||t==='hm'||t==='hl') drawHeart3D(sz);
-    else{G.rotate(this.sRot);drawStar3D(sz);}
+    const t = this.type, sz = this.sz, a = this.alpha;
+    
+    // 绘制阴影增强 3D 浮动感
+    G.shadowColor = `rgba(0,0,0,${a * 0.3})`;
+    G.shadowBlur = sz * 0.8;
+    G.shadowOffsetX = sz * 0.3;
+    G.shadowOffsetY = sz * 0.5;
+
+    if(t==='quarter') drawQuarter3D(sz, this.up, a);
+    else if(t==='eighth') drawEighth3D(sz, this.up, a);
+    else if(t==='half')   drawHalf3D(sz, this.up, a);
+    else if(t==='beamed') drawBeamed3D(sz, a);
+    else if(t==='heart')  drawHeart3D(sz, a);
+    else if(t==='star')   drawStar3D(sz, a);
+    
     G.restore();
   }
 }
 
 const elems=[];
-for(let i=0;i<40;i++)elems.push(new Elem(true)); // 初始填充空间
+for(let i=0;i<45;i++) elems.push(new Elem(true));
 
-/* ════════════════════════════════════════════════
-   3D 深度流水五线谱
-   ════════════════════════════════════════════════ */
-function drawStaff3D(){
-  const t=F*.007;
+/* ══════════════════════════════════════
+   流水五线谱（居中，缓慢摆动）
+   ══════════════════════════════════════ */
+const STAFF_SP=12;        // 谱线间距
+const STAFF_ALPHA=0.15;   // 透明度
+
+function drawFlowingStaff(){
+  const t=F*.01;
+  const cy0 = cy + Math.sin(t*.3)*15; // 整体中心缓慢上下漂浮
+
   G.save();
-  G.lineCap='round';
-  
-  // 5条线，在3D空间中从深处延伸出来
-  for(let i=0;i<5;i++){
-    const ph=i*.6;
-    G.strokeStyle=`rgba(18,15,10,${(.18*(0.8+i*.05)).toFixed(3)})`;
-    G.lineWidth=1.5;
-    G.beginPath();
-    
-    // Z 轴遍历，从深处到近处
-    let first = true;
-    for(let z=1600; z>=-FOV+100; z-=30){
-      // 这里的 x 是五线谱在3D空间中的位置，让它随 Z 轴呈波浪状
-      const x = Math.sin(z*0.003 + t*1.5 + ph) * 300;
-      const y = H*0.4 + Math.sin(z*0.005 - t*0.8 + ph) * 80; // 高度偏下，有波动
+  G.strokeStyle=`rgba(30,25,20,${STAFF_ALPHA})`;
+  G.lineWidth=1.5; G.lineCap='round';
 
-      const scale = FOV / (FOV + z);
-      const px = cx + x * scale;
-      const py = cy + (y - H/2) * scale;
-      
-      if(first){ G.moveTo(px,py); first=false; }
-      else{ G.lineTo(px,py); }
+  for(let i=0;i<5;i++){
+    const baseY=cy0+(i-2)*STAFF_SP;
+    const ph=i*.4; // 错开相位
+    
+    G.beginPath();
+    const step=10;
+    const steps=Math.ceil(W/step);
+    for(let s=0;s<=steps;s++){
+      const x=s*step;
+      const wy=
+        Math.sin(x*.005 + t*1.2 + ph) * 8 +
+        Math.sin(x*.015 - t*0.8 + ph) * 4;
+      s===0 ? G.moveTo(x, baseY+wy) : G.lineTo(x, baseY+wy);
     }
     G.stroke();
   }
   G.restore();
 }
 
-/* ════════════════════════════════════════════════
+/* ══════════════════════════════════════
    主循环
-   ════════════════════════════════════════════════ */
-let spT=0;
+   ══════════════════════════════════════ */
 G.fillStyle='#fefefe';G.fillRect(0,0,W,H);
 
 function loop(){
-  requestAnimationFrame(loop);F++;
-  G.fillStyle='rgba(254,254,254,.94)'; // 略降低拖影透明度，让残影更干净
+  requestAnimationFrame(loop); F++;
+  
+  // 拖影清理背景
+  G.fillStyle='rgba(254,254,254,0.4)';
   G.fillRect(0,0,W,H);
 
-  drawStaff3D();
+  drawFlowingStaff();
 
-  const b=bEnv();
-  if(b>.02){
-    const r=Math.min(W,H)*.3*b,grd=G.createRadialGradient(cx,cy,0,cx,cy,r);
-    grd.addColorStop(0,`rgba(10,8,5,${(b*.020).toFixed(3)})`);
-    grd.addColorStop(1,'rgba(255,255,255,0)');
-    G.fillStyle=grd;G.fillRect(0,0,W,H);
+  // 维持元素数量
+  if(elems.length < 50 && Math.random() < 0.05) {
+      elems.push(new Elem(false));
   }
 
-  // 必须按 Z 深度排序 (从远到近绘制，z大的在深处，后画z小的)
-  elems.sort((a, b) => b.z - a.z);
-
-  for(let i=elems.length-1;i>=0;i--){
-    const ok=elems[i].live();
-    elems[i].draw();
-    if(!ok) elems.splice(i,1);
+  // 浮动元素更新和绘制
+  for(let i=elems.length-1; i>=0; i--){
+    if(!elems[i].live()){
+        elems.splice(i,1);
+    } else {
+        elems[i].draw();
+    }
   }
-
-  spT++;
-  // 因为空间变深，最大元素数量适当增加
-  if(spT>=45 && elems.length<45){elems.push(new Elem(false));spT=0;}
-  if(F%Math.round(BF)<2 && elems.length<50)elems.push(new Elem(false));
 }
 loop();
 </script>
