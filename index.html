@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Folia Background</title>
+  <title>Folia BG — Sonic White</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #f5f3ef; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #ffffff; }
     canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
   </style>
 </head>
@@ -15,192 +15,320 @@
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+
 let W, H, cx, cy;
 function resize() {
-  W = canvas.width = window.innerWidth;
+  W = canvas.width  = window.innerWidth;
   H = canvas.height = window.innerHeight;
   cx = W / 2; cy = H / 2;
 }
 resize();
 window.addEventListener('resize', resize);
 
+const PI  = Math.PI;
 const PI2 = Math.PI * 2;
 const rand = (a, b) => Math.random() * (b - a) + a;
-const lerp = (a, b, t) => a + (b - a) * t;
 
-// ── 1. 透视粒子流
-const PARTICLE_COUNT = 220;
-const particles = [];
-class Particle {
-  constructor() { this.reset(true); }
-  reset(initial = false) {
-    this.x3 = rand(-1, 1);
-    this.y3 = rand(-0.6, 0.6);
-    this.z  = initial ? rand(0.1, 3) : 3;
-    this.speed = rand(0.004, 0.014);
-    this.size  = rand(1.2, 3.5);
-    this.alpha = rand(0.25, 0.7);
-    this.trail = [];
-  }
-  project(x3, y3, z) {
-    const fov = 1.2, scale = fov / z;
-    return { x: cx + x3 * cx * scale, y: cy + y3 * cy * scale, s: scale };
-  }
-  update() {
-    this.trail.push({ z: this.z });
-    if (this.trail.length > 10) this.trail.shift();
-    this.z -= this.speed;
-    if (this.z <= 0.05) this.reset();
-  }
-  draw() {
-    const cur = this.project(this.x3, this.y3, this.z);
-    const a = Math.min(1, (3 - this.z) / 2.5) * this.alpha;
-    for (let i = 0; i < this.trail.length - 1; i++) {
-      const p0 = this.project(this.x3, this.y3, this.trail[i].z);
-      const p1 = this.project(this.x3, this.y3, this.trail[i + 1].z);
-      const ta = (i / this.trail.length) * a * 0.4;
-      ctx.beginPath();
-      ctx.strokeStyle = `rgba(20,18,15,${ta})`;
-      ctx.lineWidth = this.size * p0.s * 0.3;
-      ctx.moveTo(p0.x, p0.y);
-      ctx.lineTo(p1.x, p1.y);
-      ctx.stroke();
-    }
-    ctx.beginPath();
-    ctx.arc(cur.x, cur.y, this.size * Math.min(cur.s, 2) * 0.6, 0, PI2);
-    ctx.fillStyle = `rgba(20,18,15,${a})`;
-    ctx.fill();
-  }
+let t = 0; // 全局时间（帧）
+
+// ───────────────────────────────────────────
+// 模拟音频波形函数（多谐波叠加）
+// ───────────────────────────────────────────
+function wave(x, T) {
+  const t = T * 0.012;
+  return (
+    Math.sin(x * 2.1 + t * 1.3)   * 0.38 +
+    Math.sin(x * 4.7 + t * 2.1)   * 0.22 +
+    Math.sin(x * 0.9 + t * 0.7)   * 0.28 +
+    Math.sin(x * 8.3 + t * 3.4)   * 0.08 +
+    Math.sin(x * 1.5 - t * 0.9)   * 0.14
+  );
 }
-for (let i = 0; i < PARTICLE_COUNT; i++) particles.push(new Particle());
 
-// ── 2. 流动墨线
-const INK_COUNT = 6;
-const inks = [];
-class InkLine {
-  constructor() { this.reset(); }
-  reset() {
-    this.life = rand(300, 600); this.age = rand(0, 200);
-    this.p0 = { x: rand(0, W), y: rand(0, H) };
-    this.p1 = { x: rand(0, W), y: rand(0, H) };
-    this.p2 = { x: rand(0, W), y: rand(0, H) };
-    this.p3 = { x: rand(0, W), y: rand(0, H) };
-    this.tp1 = { x: rand(0, W), y: rand(0, H) };
-    this.tp2 = { x: rand(0, W), y: rand(0, H) };
-    this.width = rand(0.5, 1.8); this.alpha = rand(0.04, 0.14);
-  }
-  update() {
-    this.age++;
-    this.p1.x = lerp(this.p1.x, this.tp1.x, 0.003);
-    this.p1.y = lerp(this.p1.y, this.tp1.y, 0.003);
-    this.p2.x = lerp(this.p2.x, this.tp2.x, 0.003);
-    this.p2.y = lerp(this.p2.y, this.tp2.y, 0.003);
-    if (Math.random() < 0.005) {
-      this.tp1 = { x: rand(0, W), y: rand(0, H) };
-      this.tp2 = { x: rand(0, W), y: rand(0, H) };
-    }
-    if (this.age > this.life) this.reset();
-  }
-  draw() {
-    const prog = this.age / this.life;
-    const fade = Math.sin(prog * Math.PI);
+// 模拟节拍包络（72BPM）
+function beatEnv(T) {
+  const bps = 72 / 60;
+  const phase = (T * 0.016 * bps) % 1; // 0~1 per beat
+  return Math.pow(Math.max(0, 1 - phase * 3), 2); // 快攻慢衰
+}
+
+// ───────────────────────────────────────────
+// 1. 核心水平波形（多层叠加）
+// ───────────────────────────────────────────
+function drawWaveform() {
+  const segments = 3;
+  const configs = [
+    { yOff: 0,    amp: H * 0.10, alpha: 0.55, lw: 1.2, speed: 1.0 },
+    { yOff: 0,    amp: H * 0.06, alpha: 0.25, lw: 0.7, speed: 1.7 },
+    { yOff: 0,    amp: H * 0.14, alpha: 0.12, lw: 2.5, speed: 0.5 },
+  ];
+
+  const beat = beatEnv(t);
+  const ampBoost = 1 + beat * 0.35;
+
+  for (const cfg of configs) {
     ctx.beginPath();
-    ctx.moveTo(this.p0.x, this.p0.y);
-    ctx.bezierCurveTo(this.p1.x, this.p1.y, this.p2.x, this.p2.y, this.p3.x, this.p3.y);
-    ctx.strokeStyle = `rgba(30,25,18,${this.alpha * fade})`;
-    ctx.lineWidth = this.width;
+    const steps = W;
+    for (let i = 0; i <= steps; i++) {
+      const x = (i / steps) * W;
+      const nx = (i / steps) * PI2 * 2;
+      const y = cy + wave(nx, t * cfg.speed) * cfg.amp * ampBoost + cfg.yOff;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = `rgba(10,8,6,${cfg.alpha + beat * 0.1})`;
+    ctx.lineWidth = cfg.lw;
     ctx.stroke();
   }
 }
-for (let i = 0; i < INK_COUNT; i++) inks.push(new InkLine());
 
-// ── 3. 扩散圆环
-const rings = [];
-class Ring {
-  constructor() { this.reset(); }
-  reset() {
-    this.x = rand(cx * 0.3, cx * 1.7); this.y = rand(cy * 0.3, cy * 1.7);
-    this.r = 0; this.maxR = rand(80, 250);
-    this.speed = rand(0.4, 0.9);
-    this.alpha = rand(0.06, 0.15); this.width = rand(0.5, 1.5); this.dead = false;
+// ───────────────────────────────────────────
+// 2. 圆形频谱环（音乐核心感）
+// ───────────────────────────────────────────
+const RING_BARS = 180;
+const BASE_R = 0; // 动态计算
+
+function drawCircularSpectrum() {
+  const beat = beatEnv(t);
+  const baseR = Math.min(W, H) * 0.16 + beat * Math.min(W, H) * 0.03;
+
+  for (let i = 0; i < RING_BARS; i++) {
+    const angle = (i / RING_BARS) * PI2 - PI / 2;
+    const nx = (i / RING_BARS) * PI2;
+    const barH = (Math.abs(wave(nx, t)) * 0.5 + 0.05) * Math.min(W, H) * 0.10 * (1 + beat * 0.5);
+    const x1 = cx + Math.cos(angle) * baseR;
+    const y1 = cy + Math.sin(angle) * baseR;
+    const x2 = cx + Math.cos(angle) * (baseR + barH);
+    const y2 = cy + Math.sin(angle) * (baseR + barH);
+
+    const alpha = 0.18 + Math.abs(wave(nx, t)) * 0.35 + beat * 0.15;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.strokeStyle = `rgba(12,10,8,${alpha})`;
+    ctx.lineWidth = (PI2 * baseR / RING_BARS) * 0.48;
+    ctx.lineCap = 'round';
+    ctx.stroke();
   }
-  update() { this.r += this.speed; if (this.r >= this.maxR) this.dead = true; }
+
+  // 内圆（呼吸）
+  ctx.beginPath();
+  ctx.arc(cx, cy, baseR - 2, 0, PI2);
+  ctx.strokeStyle = `rgba(12,10,8,${0.06 + beat * 0.08})`;
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+}
+
+// ───────────────────────────────────────────
+// 3. 节拍扩散环（Beat Rings）
+// ───────────────────────────────────────────
+const beatRings = [];
+let lastBeatT = 0;
+
+function spawnBeatRing() {
+  const baseR = Math.min(W, H) * 0.16;
+  beatRings.push({
+    r: baseR,
+    maxR: Math.min(W, H) * 0.65,
+    alpha: 0.25,
+    lw: 1.0,
+  });
+}
+
+function updateBeatRings() {
+  // 72BPM → 每 ~50帧 一拍（60fps）
+  if (t - lastBeatT > 50) {
+    spawnBeatRing();
+    lastBeatT = t;
+  }
+  for (let i = beatRings.length - 1; i >= 0; i--) {
+    const r = beatRings[i];
+    r.r += (r.maxR - r.r) * 0.022;
+    r.alpha *= 0.975;
+    if (r.alpha < 0.003) { beatRings.splice(i, 1); continue; }
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r.r, 0, PI2);
+    ctx.strokeStyle = `rgba(15,12,8,${r.alpha})`;
+    ctx.lineWidth = r.lw;
+    ctx.stroke();
+  }
+}
+
+// ───────────────────────────────────────────
+// 4. 底部频谱条（Spectrogram Bar）
+// ───────────────────────────────────────────
+const BAR_COUNT = 96;
+const BAR_ZONE_H = 0.18; // 占屏高比例
+
+function drawSpectrumBars() {
+  const beat = beatEnv(t);
+  const zoneH = H * BAR_ZONE_H;
+  const totalW = W * 0.7;
+  const startX = W * 0.15;
+  const barW = totalW / BAR_COUNT;
+  const gap   = barW * 0.25;
+  const baseY = H * 0.91;
+
+  for (let i = 0; i < BAR_COUNT; i++) {
+    const nx = (i / BAR_COUNT) * PI2 * 3;
+    const raw = Math.abs(wave(nx, t * 1.2)) * 0.7 +
+                Math.abs(wave(nx * 0.5, t * 0.8)) * 0.3;
+    const barH = (raw * 0.85 + 0.05) * zoneH * (1 + beat * 0.4);
+    const x = startX + i * barW + gap / 2;
+    const a = 0.10 + raw * 0.28 + beat * 0.08;
+
+    ctx.fillStyle = `rgba(10,8,6,${a})`;
+    ctx.beginPath();
+    ctx.roundRect(x, baseY - barH, barW - gap, barH, 1.5);
+    ctx.fill();
+  }
+
+  // 基准线
+  ctx.beginPath();
+  ctx.moveTo(startX, baseY + 0.5);
+  ctx.lineTo(startX + totalW, baseY + 0.5);
+  ctx.strokeStyle = 'rgba(10,8,6,0.08)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+}
+
+// ───────────────────────────────────────────
+// 5. 浮动音符粒子（沿波形漂移）
+// ───────────────────────────────────────────
+const NOTE_COUNT = 55;
+const notes = [];
+
+class Note {
+  constructor(initial = false) {
+    this.reset(initial);
+  }
+  reset(initial = false) {
+    this.x  = rand(0, W);
+    this.progress = initial ? rand(0, 1) : 0; // 0~1
+    this.speed = rand(0.0006, 0.0016);
+    this.size  = rand(1.2, 3.8);
+    this.alpha = rand(0.06, 0.20);
+    this.dy    = 0;
+  }
+  update() {
+    this.progress += this.speed;
+    this.x += rand(-0.3, 0.3);
+    if (this.progress > 1) this.reset();
+  }
   draw() {
-    const a = (1 - this.r / this.maxR) * this.alpha;
-    ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, PI2);
-    ctx.strokeStyle = `rgba(25,20,12,${a})`; ctx.lineWidth = this.width; ctx.stroke();
+    const nx = (this.x / W) * PI2 * 2;
+    const waveY = wave(nx, t) * H * 0.10 * (1 + beatEnv(t) * 0.2);
+    const floatY = cy + waveY - this.progress * H * 0.3; // 沿波向上飘
+    const fade = Math.sin(this.progress * PI);
+
+    ctx.beginPath();
+    ctx.arc(this.x, floatY, this.size * 0.5, 0, PI2);
+    ctx.fillStyle = `rgba(10,8,6,${this.alpha * fade})`;
+    ctx.fill();
   }
 }
 
-// ── 4. 中心呼吸光
-let breathT = 0;
-function drawBreath() {
-  breathT += 0.008;
-  const pulse = (Math.sin(breathT) + 1) / 2;
-  const r = 180 + pulse * 80;
-  const a = 0.04 + pulse * 0.04;
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-  grad.addColorStop(0,   `rgba(200,185,160,${a})`);
-  grad.addColorStop(0.5, `rgba(210,200,185,${a * 0.4})`);
-  grad.addColorStop(1,   'rgba(245,243,239,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-}
+for (let i = 0; i < NOTE_COUNT; i++) notes.push(new Note(true));
 
-// ── 5. 微噪点纹理
-let noiseCanvas;
-function buildNoise() {
-  noiseCanvas = document.createElement('canvas');
-  noiseCanvas.width = 256; noiseCanvas.height = 256;
-  const nc = noiseCanvas.getContext('2d');
-  const img = nc.createImageData(256, 256);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const v = Math.random() * 30;
-    img.data[i] = img.data[i+1] = img.data[i+2] = v;
-    img.data[i+3] = 12;
-  }
-  nc.putImageData(img, 0, 0);
-}
-buildNoise();
-function drawNoise() {
-  const pat = ctx.createPattern(noiseCanvas, 'repeat');
-  ctx.fillStyle = pat; ctx.fillRect(0, 0, W, H);
-}
+// ───────────────────────────────────────────
+// 6. 十字准星（极简设计感）
+// ───────────────────────────────────────────
+function drawCrosshair() {
+  const beat = beatEnv(t);
+  const size = 12 + beat * 4;
+  const a = 0.12 + beat * 0.08;
 
-// ── 6. 消失点透视射线网格
-let gridT = 0;
-function drawPerspectiveGrid() {
-  gridT += 0.0015;
-  const lines = 10, spread = Math.max(W, H) * 1.4;
   ctx.save();
-  for (let i = 0; i < lines; i++) {
-    const angle = (i / lines) * PI2 + gridT;
-    const ex = cx + Math.cos(angle) * spread;
-    const ey = cy + Math.sin(angle) * spread;
-    const a = 0.025 + 0.015 * Math.abs(Math.sin(angle * 3 + gridT * 2));
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey);
-    ctx.strokeStyle = `rgba(40,35,25,${a})`; ctx.lineWidth = 0.6; ctx.stroke();
-  }
+  ctx.strokeStyle = `rgba(10,8,6,${a})`;
+  ctx.lineWidth = 0.7;
+
+  // 横线
+  ctx.beginPath();
+  ctx.moveTo(cx - size, cy);
+  ctx.lineTo(cx + size, cy);
+  ctx.stroke();
+
+  // 竖线
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - size);
+  ctx.lineTo(cx, cy + size);
+  ctx.stroke();
+
+  // 中心点
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.5 + beat * 1, 0, PI2);
+  ctx.fillStyle = `rgba(10,8,6,${0.25 + beat * 0.2})`;
+  ctx.fill();
+
   ctx.restore();
 }
 
-// ── 主循环
-ctx.fillStyle = '#f5f3ef'; ctx.fillRect(0, 0, W, H);
+// ───────────────────────────────────────────
+// 7. 顶部音频时间线刻度（设计感装饰）
+// ───────────────────────────────────────────
+function drawTimeline() {
+  const y = H * 0.07;
+  const startX = W * 0.12;
+  const endX   = W * 0.88;
+  const ticks  = 32;
+
+  // 主线
+  ctx.beginPath();
+  ctx.moveTo(startX, y);
+  ctx.lineTo(endX, y);
+  ctx.strokeStyle = 'rgba(10,8,6,0.07)';
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+
+  // 刻度
+  for (let i = 0; i <= ticks; i++) {
+    const x = startX + (i / ticks) * (endX - startX);
+    const isMajor = i % 8 === 0;
+    const isMid   = i % 4 === 0;
+    const h = isMajor ? 8 : isMid ? 5 : 3;
+    const a = isMajor ? 0.14 : isMid ? 0.09 : 0.05;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y + h);
+    ctx.strokeStyle = `rgba(10,8,6,${a})`;
+    ctx.lineWidth = isMajor ? 0.8 : 0.5;
+    ctx.stroke();
+  }
+
+  // 播放头（随时间移动）
+  const headX = startX + ((t * 0.0008) % 1) * (endX - startX);
+  ctx.beginPath();
+  ctx.moveTo(headX, y - 4);
+  ctx.lineTo(headX, y + 10);
+  ctx.strokeStyle = 'rgba(10,8,6,0.30)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+// ───────────────────────────────────────────
+// 主循环
+// ───────────────────────────────────────────
 function loop() {
   requestAnimationFrame(loop);
-  ctx.fillStyle = 'rgba(245,243,239,0.35)';
+  t++;
+
+  // 纯白背景（极低透明，几乎不留拖影）
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
   ctx.fillRect(0, 0, W, H);
-  drawBreath();
-  drawPerspectiveGrid();
-  drawNoise();
-  for (const ink of inks) { ink.update(); ink.draw(); }
-  for (let i = rings.length - 1; i >= 0; i--) {
-    rings[i].update(); rings[i].draw();
-    if (rings[i].dead) rings.splice(i, 1);
-  }
-  if (Math.random() < 0.004) rings.push(new Ring());
-  for (const p of particles) { p.update(); p.draw(); }
+
+  drawTimeline();
+  updateBeatRings();
+  drawWaveform();
+  drawCircularSpectrum();
+  drawCrosshair();
+  drawSpectrumBars();
+  for (const n of notes) { n.update(); n.draw(); }
 }
+
+// 首帧纯白填充
+ctx.fillStyle = '#ffffff';
+ctx.fillRect(0, 0, W, H);
 loop();
 </script>
 </body>
