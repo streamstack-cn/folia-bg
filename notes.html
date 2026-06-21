@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Folia BG — Musical Garden</title>
+<style>
+*{margin:0;padding:0;}
+html,body{width:100%;height:100%;overflow:hidden;background:#fefefe;}
+canvas{position:fixed;inset:0;width:100%;height:100%;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+const CV=document.getElementById('c');
+const G=CV.getContext('2d');
+let W,H,cx,cy;
+function resize(){W=CV.width=innerWidth;H=CV.height=innerHeight;cx=W/2;cy=H/2;}
+resize();addEventListener('resize',resize);
+
+const PI=Math.PI,TAU=PI*2;
+const rand=(a,b)=>a+Math.random()*(b-a);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+/* ── Beat (80 BPM) ── */
+let F=0;
+const BPM=80,BF=60*60/BPM; // ~45 frames/beat
+function bEnv(){return Math.pow(clamp(1-(F%BF)/BF*2.2,0,1),2.5);}
+function bPulse(){return 1+bEnv()*0.14;}
+
+/* ══════════════════════════════════════════
+   DRAWING PRIMITIVES (all draw at 0,0)
+   ══════════════════════════════════════════ */
+
+// Cute oval note head (tilted -20°)
+function noteHead(sz,fill){
+  G.save(); G.rotate(-.36);
+  G.beginPath();
+  G.ellipse(0,0,sz*.58,sz*.43,0,0,TAU);
+  if(fill){ G.fillStyle='rgba(18,15,10,1)'; G.fill();}
+  else{
+    G.fillStyle='rgba(255,255,255,.95)';
+    G.fill();
+    G.strokeStyle='rgba(18,15,10,1)';
+    G.lineWidth=sz*.13;
+    G.stroke();
+  }
+  G.restore();
+}
+
+// Stem (up by default)
+function stem(sz,up=true,h=2.9){
+  const sx=sz*.45, sy=-sz*.08;
+  const ey=up ? -sz*h : sz*h;
+  G.beginPath();
+  G.moveTo(sx,sy);G.lineTo(sx,ey);
+  G.strokeStyle='rgba(18,15,10,1)';
+  G.lineWidth=sz*.17;G.lineCap='round';G.stroke();
+}
+
+// Cute single-flag (eighth note)
+function flag(sz,up=true){
+  const sx=sz*.45, top=up ? -sz*2.9 : sz*2.9;
+  const dir=up?1:-1;
+  G.beginPath();
+  G.moveTo(sx,top);
+  G.bezierCurveTo(
+    sx+sz*1.3, top+sz*dir*.55,
+    sx+sz*1.1, top+sz*dir*1.35,
+    sx+sz*.15, top+sz*dir*1.75
+  );
+  G.strokeStyle='rgba(18,15,10,1)';
+  G.lineWidth=sz*.16;G.lineCap='round';G.stroke();
+}
+
+// Beam bar between two notes gap apart
+function beam(sz,gap){
+  const sx=sz*.45, ex=gap+sz*.45, ty=-sz*3.1;
+  G.beginPath();
+  G.moveTo(sx,ty);G.lineTo(ex,ty);
+  G.strokeStyle='rgba(18,15,10,1)';
+  G.lineWidth=sz*.42;G.lineCap='square';G.stroke();
+}
+
+/* ── Note type renderers ── */
+
+function drawQuarter(sz,up=true){
+  noteHead(sz,true);stem(sz,up);
+}
+function drawHalf(sz,up=true){
+  noteHead(sz,false);stem(sz,up);
+}
+function drawEighth(sz,up=true){
+  noteHead(sz,true);stem(sz,up);flag(sz,up);
+}
+function drawBeamed(sz){
+  const gap=sz*2.4;
+  noteHead(sz,true);
+  G.save();G.translate(gap,0);noteHead(sz,true);G.restore();
+  // stems
+  const sx=sz*.45,ty=-sz*3.1;
+  G.beginPath();G.moveTo(sx,-sz*.08);G.lineTo(sx,ty);
+  G.strokeStyle='rgba(18,15,10,1)';G.lineWidth=sz*.17;G.lineCap='round';G.stroke();
+  G.beginPath();G.moveTo(gap+sx,-sz*.08);G.lineTo(gap+sx,ty);G.stroke();
+  beam(sz,gap);
+}
+function drawDoubleBeamed(sz){
+  const gap=sz*2.4;
+  noteHead(sz,true);
+  G.save();G.translate(gap,0);noteHead(sz,true);G.restore();
+  const sx=sz*.45,ty=-sz*3.1;
+  G.beginPath();G.moveTo(sx,-sz*.08);G.lineTo(sx,ty);
+  G.strokeStyle='rgba(18,15,10,1)';G.lineWidth=sz*.17;G.lineCap='round';G.stroke();
+  G.beginPath();G.moveTo(gap+sx,-sz*.08);G.lineTo(gap+sx,ty);G.stroke();
+  beam(sz,gap);
+  // second beam
+  const ty2=ty+sz*.52;
+  G.beginPath();G.moveTo(sx,ty2);G.lineTo(gap+sx,ty2);
+  G.strokeStyle='rgba(18,15,10,1)';G.lineWidth=sz*.42;G.lineCap='square';G.stroke();
+}
+
+// Cute treble clef (hand-drawn bezier)
+function drawClef(sz){
+  const s=sz/38;
+  G.save();G.scale(s,s);
+  G.strokeStyle='rgba(18,15,10,1)';
+  G.lineWidth=3.2;G.lineCap='round';G.lineJoin='round';G.fillStyle='none';
+
+  G.beginPath();
+  // body curl
+  G.moveTo(4,22);
+  G.bezierCurveTo(-18,12,-18,-12,2,-22);
+  G.bezierCurveTo(22,-32,28,-8,18,8);
+  G.bezierCurveTo(8,24,-14,26,-14,10);
+  G.bezierCurveTo(-14,-4,6,-8,10,0);
+  G.stroke();
+
+  G.beginPath();
+  // tail
+  G.moveTo(4,22);
+  G.bezierCurveTo(4,42,4,54,2,62);
+  G.bezierCurveTo(0,74,-14,74,-10,60);
+  G.stroke();
+
+  G.restore();
+}
+
+// Heart
+function drawHeart(sz){
+  G.save();G.scale(sz/14,sz/14);
+  G.beginPath();
+  G.moveTo(0,4);
+  G.bezierCurveTo(-7,-2,-14,4,-14,10);
+  G.bezierCurveTo(-14,18,0,26,0,26);
+  G.bezierCurveTo(0,26,14,18,14,10);
+  G.bezierCurveTo(14,4,7,-2,0,4);
+  G.closePath();
+  G.fillStyle='rgba(18,15,10,.85)';G.fill();
+  G.restore();
+}
+
+// Sparkle star (4-pointed)
+function drawSparkle(sz){
+  G.save();
+  const r1=sz,r2=sz*.4;
+  G.beginPath();
+  for(let i=0;i<8;i++){
+    const a=(i/8)*TAU,r=i%2===0?r1:r2;
+    i===0?G.moveTo(Math.cos(a)*r,Math.sin(a)*r):G.lineTo(Math.cos(a)*r,Math.sin(a)*r);
+  }
+  G.closePath();
+  G.fillStyle='rgba(18,15,10,.8)';G.fill();
+  G.restore();
+}
+
+// Small dot accent
+function drawDot(sz){
+  G.beginPath();G.arc(0,0,sz,0,TAU);
+  G.fillStyle='rgba(18,15,10,.55)';G.fill();
+}
+
+/* ══════════════════════════════════════════
+   PARTICLE SYSTEM
+   ══════════════════════════════════════════ */
+const NTYPES=['quarter','quarter','half','eighth','eighth',
+              'beamed','beamed','dbeamed','clef','heart','sparkle','sparkle','dot'];
+
+class Note{
+  constructor(init=false){this.reset(init);}
+  reset(init=false){
+    this.type=NTYPES[Math.floor(rand(0,NTYPES.length))];
+    this.x=rand(W*.07,W*.93);
+    this.y=init?rand(H*.08,H*.94):H+rand(30,100);
+    this.sz=this.type==='clef'?rand(20,34):
+            this.type==='beamed'||this.type==='dbeamed'?rand(9,16):
+            rand(11,22);
+    this.vx=rand(-.25,.25);
+    this.vy=rand(-.55,-1.15);
+    this.rot=rand(-PI*.25,PI*.25);
+    this.rotV=rand(-.006,.006);
+    this.swayA=rand(8,28);
+    this.swayF=rand(.6,1.6);
+    this.swayP=rand(0,TAU);
+    this.stemUp=Math.random()>.5;
+    this.alpha=0;
+    this.tAlpha=rand(.5,.85);
+    this.born=F;
+    this.life=rand(450,900);
+    this.fade=rand(60,120);
+  }
+  live(){
+    const age=F-this.born,life=age/this.life;
+    if(age<this.fade)this.alpha=lerp(0,this.tAlpha,age/this.fade);
+    else if(life>.72)this.alpha=lerp(this.tAlpha,0,(life-.72)/.28);
+    else this.alpha=this.tAlpha;
+
+    this.x+=this.vx+Math.sin(F*.018*this.swayF+this.swayP)*(.28);
+    this.y+=this.vy*(1+bEnv()*.22);
+    this.rot+=this.rotV;
+    return age<this.life&&this.y>-120;
+  }
+  draw(){
+    const bp=bPulse();
+    G.save();
+    G.globalAlpha=this.alpha;
+    G.translate(this.x,this.y);
+    G.rotate(this.rot);
+    G.scale(bp,bp);
+    switch(this.type){
+      case'quarter':   drawQuarter(this.sz,this.stemUp);break;
+      case'half':      drawHalf(this.sz,this.stemUp);break;
+      case'eighth':    drawEighth(this.sz,this.stemUp);break;
+      case'beamed':    drawBeamed(this.sz);break;
+      case'dbeamed':   drawDoubleBeamed(this.sz);break;
+      case'clef':      drawClef(this.sz);break;
+      case'heart':     drawHeart(this.sz*.9);break;
+      case'sparkle':   drawSparkle(this.sz*.52);break;
+      case'dot':       drawDot(this.sz*.38);break;
+    }
+    G.restore();
+  }
+}
+
+const notes=[];
+for(let i=0;i<40;i++) notes.push(new Note(true));
+
+/* ══════════════════════════════════════════
+   STAFF LINES (drifting, wavy)
+   ══════════════════════════════════════════ */
+const staves=[
+  {x:-W*.3,y:H*.17,spd:.35,sp:7.5,a:.058,ph:0.0},
+  {x: W*.2,y:H*.38,spd:.28,sp:7.0,a:.048,ph:1.8},
+  {x:-W*.5,y:H*.58,spd:.42,sp:8.0,a:.065,ph:3.3},
+  {x: W*.0,y:H*.76,spd:.22,sp:7.2,a:.044,ph:5.1},
+  {x:-W*.15,y:H*.92,spd:.31,sp:6.8,a:.040,ph:2.5},
+];
+
+function drawStave(s){
+  const w=W*.72;
+  G.save();
+  G.strokeStyle=`rgba(18,15,10,${s.a})`;
+  G.lineWidth=.7;G.lineCap='round';
+  for(let i=0;i<5;i++){
+    const ly=s.y+i*s.sp;
+    G.beginPath();
+    const steps=Math.ceil(w/3);
+    for(let k=0;k<=steps;k++){
+      const sx=s.x+k*3;
+      const wv=Math.sin(sx*.014+s.ph)*2.2+Math.sin(sx*.028+s.ph*1.4)*.9;
+      k===0?G.moveTo(sx,ly+wv):G.lineTo(sx,ly+wv);
+    }
+    G.stroke();
+  }
+  G.restore();
+  s.x+=s.spd;s.ph+=.007;
+  if(s.x>W*1.15)s.x=-W*.85;
+}
+
+/* ══════════════════════════════════════════
+   BACKGROUND PULSE (very subtle)
+   ══════════════════════════════════════════ */
+function drawPulse(){
+  const b=bEnv();
+  if(b<.01)return;
+  const r=Math.min(W,H)*.35*b;
+  const grad=G.createRadialGradient(cx,cy,0,cx,cy,r);
+  grad.addColorStop(0,`rgba(10,8,5,${b*.028})`);
+  grad.addColorStop(1,'rgba(255,255,255,0)');
+  G.fillStyle=grad;G.fillRect(0,0,W,H);
+}
+
+/* ══════════════════════════════════════════
+   SPAWN CONTROL
+   ══════════════════════════════════════════ */
+let spawnT=0;
+function spawnNotes(){
+  spawnT++;
+  const interval=40+Math.round(bEnv()*(-15));
+  if(spawnT>=interval&&notes.length<55){
+    notes.push(new Note(false));
+    spawnT=0;
+  }
+  // extra pop on beat
+  if(F%Math.round(BF)<2&&notes.length<60){
+    for(let i=0;i<2;i++){
+      const n=new Note(false);
+      n.x=rand(W*.15,W*.85);
+      n.vy=rand(-.9,-1.6);
+      notes.push(n);
+    }
+  }
+}
+
+/* ══════════════════════════════════════════
+   MAIN LOOP
+   ══════════════════════════════════════════ */
+G.fillStyle='#fefefe';G.fillRect(0,0,W,H);
+
+function loop(){
+  requestAnimationFrame(loop);F++;
+
+  G.fillStyle='rgba(254,254,254,.93)';
+  G.fillRect(0,0,W,H);
+
+  // staff lines
+  for(const s of staves) drawStave(s);
+
+  // beat glow
+  drawPulse();
+
+  // notes
+  for(let i=notes.length-1;i>=0;i--){
+    const alive=notes[i].live();
+    notes[i].draw();
+    if(!alive) notes.splice(i,1);
+  }
+
+  spawnNotes();
+}
+loop();
+</script>
+</body>
+</html>
