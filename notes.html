@@ -115,12 +115,13 @@ const POOL=[
 const PTOTAL=POOL.reduce((s,p)=>s+p.w,0);
 function pickType(){let r=rand(0,PTOTAL);for(const p of POOL){if(r<p.w)return p.t;r-=p.w;}return'quarter';}
 
-/* 生成X时分三区（左/中/右），保证全屏分布 */
-let zoneCounter=0;
+/* 生成X时避开屏幕中央（保留给歌词），主要在两侧生成 */
 function spawnX(){
-  const z=zoneCounter%3;zoneCounter++;
-  const seg=W/3;
-  return seg*z+rand(seg*.08,seg*.92);
+  if(Math.random() < 0.5) {
+    return rand(W*.04, W*.32); // 左侧区域
+  } else {
+    return rand(W*.68, W*.96); // 右侧区域
+  }
 }
 
 class Elem{
@@ -173,22 +174,25 @@ class Elem{
     const topFade=clamp(this.y/(H*.07),0,1);
     this.alpha=this.tAlpha*timeFade*topFade;
 
-    /* ── 左右边缘弹回（弹性 + 可爱抖动）── */
+    /* ── 左右边缘明显弹回 ── */
     const pad=Math.max(this.sz*1.5, 18);
     if(this.x<pad){
-      // 弹回：速度取正，加弹力，旋转翻转
-      this.vx=Math.abs(this.vx)*.72+rand(.08,.18);
+      // 弹回：赋予一个明显的基础初速度，自然且柔和
+      this.vx=Math.abs(this.vx)*0.85 + rand(0.35, 0.6);
       this.x=pad;
       this.rotV*=-1;           // 反转自转方向
       this.swayP+=PI;          // 摆动相位翻转
     } else if(this.x>W-pad){
-      this.vx=-(Math.abs(this.vx)*.72+rand(.08,.18));
+      this.vx=-(Math.abs(this.vx)*0.85 + rand(0.35, 0.6));
       this.x=W-pad;
       this.rotV*=-1;
       this.swayP+=PI;
     }
 
-    /* ── 位置更新 ── */
+    /* ── 位置更新（附带微弱的中心排斥力，自然保持中间空旷） ── */
+    const gentleRepel = this.x < W/2 ? -0.0015 : 0.0015;
+    this.vx += gentleRepel;
+
     this.x+=this.vx+Math.sin(F*.016*this.swayF+this.swayP)*.28;
     this.y+=this.vy*(1+b*.18);
     this.rot+=this.rotV;
@@ -217,9 +221,9 @@ class Elem{
   }
 }
 
-// 初始数量减少（30个，分布全屏）
+// 初始数量减少，分布在两侧，中间给歌词留白
 const elems=[];
-for(let i=0;i<30;i++) elems.push(new Elem(true));
+for(let i=0;i<16;i++) elems.push(new Elem(true));
 
 /* ════════════════════════════════════════
    流水五线谱（一横带，更大更清晰）
@@ -278,8 +282,8 @@ function drawBeatGlow(){
    生成控制（减少数量）
    ════════════════════════════════════════ */
 let spawnT=0;
-const MAX_ELEMS=32;
-const SPAWN_INT=58; // 每58帧生成一个（之前44）
+const MAX_ELEMS=18;  // 总数量大幅减少，避免眼花缭乱
+const SPAWN_INT=85;  // 生成间隔拉长，让画面更清爽
 
 function spawnCtrl(){
   spawnT++;
