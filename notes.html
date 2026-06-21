@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>Folia BG — Musical Garden</title>
+<title>Folia BG — Naked Eye 3D Garden</title>
 <style>
 *{margin:0;padding:0;}
 html,body{width:100%;height:100%;overflow:hidden;background:#fefefe;}
@@ -29,287 +29,300 @@ let F=0;
 const BPM=78,BF=60*60/BPM;
 function bEnv(){return Math.pow(clamp(1-(F%BF)/BF*2.3,0,1),2.8);}
 
-/* ════════════════════════════════════════
-   绘制原语（均在 (0,0) 绘制）
-   ════════════════════════════════════════ */
-function noteHead(sz,fill,hl=false){
-  G.save();G.rotate(-.36);
-  G.beginPath();G.ellipse(0,0,sz*.57,sz*.42,0,0,TAU);
-  if(fill){
-    G.fillStyle='rgb(18,15,10)';G.fill();
-    if(hl){
-      G.beginPath();G.ellipse(-sz*.14,-sz*.12,sz*.19,sz*.11,.3,0,TAU);
-      G.fillStyle='rgba(255,255,255,.52)';G.fill();
-    }
-  } else {
-    G.fillStyle='rgba(255,255,255,.92)';G.fill();
-    G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.13;G.stroke();
-  }
+/* ════════════════════════════════════════════════
+   3D 绘制原语（粘土/气泡质感）
+   ════════════════════════════════════════════════ */
+
+const DARK ='rgb(20,16,11)';
+const cDome=(a)=>`rgba(65,52,36,${a})`;
+const cSpec=(a)=>`rgba(255,255,255,${a})`;
+const cShad=(a)=>`rgba(0,0,0,${a})`;
+
+function head3D(sz){
+  G.save();G.rotate(-.32);
+  G.beginPath();G.ellipse(sz*.14,sz*.22,sz*.60,sz*.46,0,0,TAU);
+  G.fillStyle=cShad(.13);G.fill();
+  G.beginPath();G.ellipse(0,0,sz*.60,sz*.46,0,0,TAU);
+  G.fillStyle=DARK;G.fill();
+  G.beginPath();G.ellipse(-sz*.11,-sz*.10,sz*.37,sz*.27,0,0,TAU);
+  G.fillStyle=cDome(.56);G.fill();
+  G.beginPath();G.ellipse(-sz*.22,-sz*.16,sz*.17,sz*.10,.28,0,TAU);
+  G.fillStyle=cSpec(.66);G.fill();
   G.restore();
 }
-function stem(sz,up=true){
-  const sx=sz*.44,sy=up?-sz*.08:sz*.08,ey=up?-sz*2.85:sz*2.85;
+
+function headHollow3D(sz){
+  G.save();G.rotate(-.32);
+  G.beginPath();G.ellipse(sz*.13,sz*.20,sz*.62,sz*.48,0,0,TAU);
+  G.fillStyle='rgba(255,255,255,.9)';G.fill();
+  G.strokeStyle=cShad(.12);G.lineWidth=sz*.18;G.stroke();
+  G.beginPath();G.ellipse(0,0,sz*.60,sz*.46,0,0,TAU);
+  G.fillStyle='rgba(255,255,255,.96)';G.fill();
+  G.strokeStyle=DARK;G.lineWidth=sz*.15;G.stroke();
+  G.beginPath();G.ellipse(sz*.07,sz*.07,sz*.30,sz*.22,0,0,TAU);
+  G.fillStyle='rgba(20,16,11,.11)';G.fill();
+  G.beginPath();G.ellipse(-sz*.25,-sz*.14,sz*.12,sz*.07,.3,0,TAU);
+  G.fillStyle=cSpec(.58);G.fill();
+  G.restore();
+}
+
+function stem3D(sz,up=true){
+  const sx=sz*.46,sy=up?-sz*.10:sz*.10,ey=up?-sz*2.90:sz*2.90,w=sz*.17;
+  G.beginPath();G.moveTo(sx+sz*.10,sy+sz*.10);G.lineTo(sx+sz*.10,ey+sz*.10);
+  G.strokeStyle=cShad(.13);G.lineWidth=w*1.35;G.lineCap='round';G.stroke();
   G.beginPath();G.moveTo(sx,sy);G.lineTo(sx,ey);
-  G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.16;G.lineCap='round';G.stroke();
+  G.strokeStyle=DARK;G.lineWidth=w;G.stroke();
+  G.beginPath();G.moveTo(sx-w*.35,sy);G.lineTo(sx-w*.35,ey);
+  G.strokeStyle=cDome(.44);G.lineWidth=w*.28;G.stroke();
 }
-function flag(sz,up=true){
-  const sx=sz*.44,top=up?-sz*2.85:sz*2.85,d=up?1:-1;
-  G.beginPath();G.moveTo(sx,top);
-  G.bezierCurveTo(sx+sz*1.25,top+sz*d*.52,sx+sz*1.1,top+sz*d*1.28,sx+sz*.12,top+sz*d*1.7);
-  G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.15;G.lineCap='round';G.stroke();
+
+function flag3D(sz,up=true){
+  const sx=sz*.46,top=up?-sz*2.90:sz*2.90,d=up?1:-1;
+  const c=[sx+sz*1.28,top+sz*d*.52,sx+sz*1.08,top+sz*d*1.28,sx+sz*.12,top+sz*d*1.72];
+  G.lineCap='round';
+  G.beginPath();G.moveTo(sx+sz*.10,top+sz*.10);
+  G.bezierCurveTo(c[0]+sz*.10,c[1]+sz*.10,c[2]+sz*.10,c[3]+sz*.10,c[4]+sz*.10,c[5]+sz*.10);
+  G.strokeStyle=cShad(.12);G.lineWidth=sz*.18;G.stroke();
+  G.beginPath();G.moveTo(sx,top);G.bezierCurveTo(...c);
+  G.strokeStyle=DARK;G.lineWidth=sz*.15;G.stroke();
 }
-function beam(sz,gap){
-  const sx=sz*.44,ex=gap+sz*.44,ty=-sz*3.08;
+
+function beam3D(sz,gap){
+  const sx=sz*.46,ex=gap+sz*.46,ty=-sz*2.90,w=sz*.42;
+  G.beginPath();G.moveTo(sx+sz*.10,ty+sz*.14);G.lineTo(ex+sz*.10,ty+sz*.14);
+  G.strokeStyle=cShad(.14);G.lineWidth=w*1.28;G.lineCap='square';G.stroke();
   G.beginPath();G.moveTo(sx,ty);G.lineTo(ex,ty);
-  G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.4;G.lineCap='square';G.stroke();
+  G.strokeStyle=DARK;G.lineWidth=w;G.stroke();
+  G.beginPath();G.moveTo(sx,ty-w*.27);G.lineTo(ex,ty-w*.27);
+  G.strokeStyle=cDome(.42);G.lineWidth=w*.22;G.stroke();
 }
-function drawQuarter(sz,up,hl){noteHead(sz,true,hl);stem(sz,up);}
-function drawHalf(sz,up,hl){noteHead(sz,false,hl);stem(sz,up);}
-function drawEighth(sz,up,hl){noteHead(sz,true,hl);stem(sz,up);flag(sz,up);}
-function drawBeamed(sz,hl){
+
+function drawQ3D(sz,up){head3D(sz);stem3D(sz,up);}
+function drawH3D(sz,up){headHollow3D(sz);stem3D(sz,up);}
+function drawE3D(sz,up){head3D(sz);stem3D(sz,up);flag3D(sz,up);}
+function drawB3D(sz){
   const gap=sz*2.3;
-  noteHead(sz,true,hl);
-  G.save();G.translate(gap,0);noteHead(sz,true,false);G.restore();
+  head3D(sz);
+  G.save();G.translate(gap,0);head3D(sz);G.restore();
   [0,gap].forEach(dx=>{
-    G.beginPath();G.moveTo(dx+sz*.44,-sz*.08);G.lineTo(dx+sz*.44,-sz*3.08);
-    G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.16;G.lineCap='round';G.stroke();
+    G.lineCap='round';
+    G.beginPath();G.moveTo(dx+sz*.46+sz*.10,-sz*.10+sz*.10);G.lineTo(dx+sz*.46+sz*.10,-sz*2.90+sz*.10);
+    G.strokeStyle=cShad(.13);G.lineWidth=sz*.22;G.stroke();
+    G.beginPath();G.moveTo(dx+sz*.46,-sz*.10);G.lineTo(dx+sz*.46,-sz*2.90);
+    G.strokeStyle=DARK;G.lineWidth=sz*.17;G.stroke();
+    G.beginPath();G.moveTo(dx+sz*.46-sz*.06,-sz*.10);G.lineTo(dx+sz*.46-sz*.06,-sz*2.90);
+    G.strokeStyle=cDome(.42);G.lineWidth=sz*.05;G.stroke();
   });
-  beam(sz,gap);
+  beam3D(sz,gap);
 }
-function drawHeart(sz){
+
+function drawHeart3D(sz){
   G.save();G.scale(sz/16,sz/16);
-  G.beginPath();
-  G.moveTo(0,5);
-  G.bezierCurveTo(-8,-2,-16,6,-16,12);
-  G.bezierCurveTo(-16,21,0,29,0,29);
-  G.bezierCurveTo(0,29,16,21,16,12);
-  G.bezierCurveTo(16,6,8,-2,0,5);
-  G.closePath();
-  G.fillStyle='rgb(18,15,10)';G.fill();
-  if(sz>14){
-    G.beginPath();G.ellipse(-5,-3,4,2.5,-.4,0,TAU);
-    G.fillStyle='rgba(255,255,255,.38)';G.fill();
+  function hp(ox=0,oy=0){
+    G.beginPath();G.moveTo(ox,oy+5);
+    G.bezierCurveTo(ox-8,oy-2,ox-16,oy+6,ox-16,oy+12);
+    G.bezierCurveTo(ox-16,oy+21,ox,oy+30,ox,oy+30);
+    G.bezierCurveTo(ox,oy+30,ox+16,oy+21,ox+16,oy+12);
+    G.bezierCurveTo(ox+16,oy+6,ox+8,oy-2,ox,oy+5);G.closePath();
   }
+  hp(2,3);G.fillStyle=cShad(.13);G.fill();
+  hp();   G.fillStyle=DARK;G.fill();
+  G.beginPath();G.ellipse(-5,4,7.5,5.5,-.3,0,TAU);
+  G.fillStyle=cDome(.52);G.fill();
+  G.beginPath();G.ellipse(-7.5,0,4.8,3,-.4,0,TAU);
+  G.fillStyle=cSpec(.64);G.fill();
   G.restore();
 }
-function drawStar(sz){
+
+function drawStar3D(sz){
   const r1=sz,r2=sz*.38;
-  G.beginPath();
-  for(let i=0;i<8;i++){
-    const a=i/8*TAU-PI/2,r=i%2===0?r1:r2;
-    i===0?G.moveTo(Math.cos(a)*r,Math.sin(a)*r):G.lineTo(Math.cos(a)*r,Math.sin(a)*r);
+  function sp(ox=0,oy=0){
+    G.beginPath();
+    for(let i=0;i<8;i++){
+      const a=i/8*TAU-PI/2,r=i%2===0?r1:r2;
+      i===0?G.moveTo(ox+Math.cos(a)*r,oy+Math.sin(a)*r)
+           :G.lineTo(ox+Math.cos(a)*r,oy+Math.sin(a)*r);
+    }G.closePath();
   }
-  G.closePath();G.fillStyle='rgb(18,15,10)';G.fill();
-  G.beginPath();G.arc(-sz*.12,-sz*.14,sz*.14,0,TAU);
-  G.fillStyle='rgba(255,255,255,.4)';G.fill();
+  sp(sz*.14,sz*.22);G.fillStyle=cShad(.12);G.fill();
+  sp();              G.fillStyle=DARK;G.fill();
+  G.beginPath();G.arc(-sz*.10,-sz*.10,sz*.34,0,TAU);
+  G.fillStyle=cDome(.48);G.fill();
+  G.beginPath();G.arc(-sz*.22,-sz*.24,sz*.13,0,TAU);
+  G.fillStyle=cSpec(.62);G.fill();
 }
 
-/* ════════════════════════════════════════
-   浮动元素
-   ════════════════════════════════════════ */
+/* ════════════════════════════════════════════════
+   3D 空间与粒子系统
+   ════════════════════════════════════════════════ */
+
+const FOV = 600; // 视距（摄像机焦距），决定透视畸变程度
+
 const POOL=[
-  {t:'quarter',w:7},{t:'eighth',w:7},{t:'half',w:4},{t:'beamed',w:6},
-  {t:'heart_sm',w:4},{t:'heart_md',w:4},{t:'heart_lg',w:2},
-  {t:'star_sm',w:3},{t:'star_md',w:3},
+  {t:'Q',w:7},{t:'E',w:7},{t:'H',w:4},{t:'B',w:6},
+  {t:'hs',w:3},{t:'hm',w:4},{t:'hl',w:2},
+  {t:'ss',w:3},{t:'sm',w:2},
 ];
-const PTOTAL=POOL.reduce((s,p)=>s+p.w,0);
-function pickType(){let r=rand(0,PTOTAL);for(const p of POOL){if(r<p.w)return p.t;r-=p.w;}return'quarter';}
-
-/* 生成X时分三区（左/中/右），保证全屏分布 */
-let zoneCounter=0;
-function spawnX(){
-  const z=zoneCounter%3;zoneCounter++;
-  const seg=W/3;
-  return seg*z+rand(seg*.08,seg*.92);
-}
+const PT=POOL.reduce((s,p)=>s+p.w,0);
+function pickT(){let r=rand(0,PT);for(const p of POOL){if(r<p.w)return p.t;r-=p.w;}return'Q';}
 
 class Elem{
   constructor(init=false){this.reset(init);}
   reset(init=false){
-    const t=this.type=pickType();
-    this.x=spawnX();
-    if(init){
-      // 初始化：均匀分布在全屏
-      this.y=rand(H*.05,H*.92);
-    } else {
-      // 正常生成：70%从底部浮起，30%从中下区域插入
-      this.y=Math.random()<.7?H+rand(20,80):rand(H*.45,H*.88);
-    }
-    this.sz=t==='quarter'||t==='eighth'||t==='half'?rand(11,24):
-             t==='beamed'?rand(9,16):
-             t==='heart_sm'?rand(5,11):
-             t==='heart_md'?rand(13,22):
-             t==='heart_lg'?rand(24,40):
-             t==='star_sm'?rand(4,9):rand(10,19);
-    // 透明度范围大，形成层次感（浅的如远景，深的如近景）
-    this.tAlpha=t.startsWith('heart')||t.startsWith('star')?rand(0.16,0.68):rand(0.18,0.82);
-    this.hl=Math.random()<.48;
+    const t=this.t=pickT();
+    // 真3D坐标
+    this.z = init ? rand(0, 1500) : rand(1200, 1600); // z大表示在屏幕深处
+    this.x = rand(-W*0.6, W*0.6); // 3D空间X宽于屏幕，以便部分元素从侧边飞出
+    this.y = rand(H*0.1, H*0.8);  // 3D空间Y
+
+    this.sz=t==='Q'||t==='E'||t==='H'?rand(11,23):
+             t==='B'?rand(9,15):
+             t==='hs'?rand(5,10):t==='hm'?rand(12,20):t==='hl'?rand(22,38):
+             t==='ss'?rand(4,8):rand(10,17);
+
+    // 基准大小放大，因为在远处会变小
+    this.sz *= 1.5;
+
+    this.tA=(t==='hs'||t==='hm'||t==='hl'||t==='ss'||t==='sm')?rand(.28,.78):rand(.30,.92);
     this.up=Math.random()>.45;
-    this.vy=rand(-.42,-1.05);
-    this.vx=rand(-.3,.3);
-    this.rot=rand(-PI*.28,PI*.28);
-    this.rotV=rand(-.008,.008);
-    this.swayA=rand(5,22);
-    this.swayF=rand(.5,1.7);
-    this.swayP=rand(0,TAU);
-    this.alpha=0;
-    this.born=F;
-    this.life=rand(440,850);
-    this.fadeT=rand(55,100);
-    this.starRot=rand(0,TAU);
-    this.bouncing=false; // 弹回状态标记
+    
+    // 3D速度向量：主要是向外飞(vz<0)并向上飘(vy<0)
+    this.vz = rand(-1.2, -3.5); 
+    this.vy = rand(-0.4, -1.2);
+    this.vx = rand(-0.8, 0.8);
+    
+    this.rot=rand(-PI*.28,PI*.28);this.rotV=rand(-.007,.007);
+    this.swF=rand(.5,1.7);this.swP=rand(0,TAU);
+    this.a=0;this.born=F;this.life=rand(440,850);this.fadeT=rand(30,60);
+    this.sRot=rand(0,TAU);
+    this.scale = 1;
   }
-
+  
   live(){
-    const age=F-this.born,life=age/this.life;
-    const b=bEnv();
+    const age=F-this.born, life=age/this.life, b=bEnv();
+    let tf=age<this.fadeT?age/this.fadeT:life>.75?clamp(1-(life-.75)/.25,0,1):1;
+    
+    // 根据Z深度添加雾化/景深效果（越远越透明）
+    const depthAlpha = clamp(1 - (this.z / 1800), 0.1, 1);
+    this.a = this.tA * tf * depthAlpha;
 
-    /* ── 透明度：时间渐隐 + 顶部边缘渐隐 ── */
-    let timeFade;
-    if(age<this.fadeT)       timeFade=age/this.fadeT;
-    else if(life>0.68)       timeFade=clamp(1-(life-0.68)/0.32,0,1);
-    else                     timeFade=1;
-    // 顶部5%区域渐隐
-    const topFade=clamp(this.y/(H*.07),0,1);
-    this.alpha=this.tAlpha*timeFade*topFade;
+    // 物理位置更新
+    this.x += this.vx + Math.sin(F*.016*this.swF+this.swP)*1.5;
+    this.y += this.vy * (1+b*.18);
+    this.z += this.vz * (1+b*.1);
 
-    /* ── 左右边缘弹回（弹性 + 可爱抖动）── */
-    const pad=Math.max(this.sz*1.5, 18);
-    if(this.x<pad){
-      // 弹回：速度取正，加弹力，旋转翻转
-      this.vx=Math.abs(this.vx)*.72+rand(.08,.18);
-      this.x=pad;
-      this.rotV*=-1;           // 反转自转方向
-      this.swayP+=PI;          // 摆动相位翻转
-    } else if(this.x>W-pad){
-      this.vx=-(Math.abs(this.vx)*.72+rand(.08,.18));
-      this.x=W-pad;
-      this.rotV*=-1;
-      this.swayP+=PI;
+    // 透视投影
+    if(this.z <= -FOV + 10) return false; // 越过相机，销毁
+    this.scale = FOV / (FOV + this.z);
+    this.px = cx + this.x * this.scale;
+    this.py = cy + (this.y - H/2) * this.scale; // Y轴中心对齐视平线
+
+    // 屏幕边缘弹回 (基于投影后坐标px)
+    const pad = this.sz * this.scale * 1.5;
+    if(this.px < pad && this.vx < 0) {
+      this.vx = Math.abs(this.vx)*0.8 + 0.2;
+      this.rotV *= -1; this.swP += PI;
+    } else if(this.px > W-pad && this.vx > 0) {
+      this.vx = -Math.abs(this.vx)*0.8 - 0.2;
+      this.rotV *= -1; this.swP += PI;
     }
 
-    /* ── 位置更新 ── */
-    this.x+=this.vx+Math.sin(F*.016*this.swayF+this.swayP)*.28;
-    this.y+=this.vy*(1+b*.18);
-    this.rot+=this.rotV;
-    this.starRot+=.009;
-
-    /* ── 移除条件：alpha 近于零且超出生命期 ── */
-    return !(this.alpha<0.008 && life>0.68);
+    this.rot+=this.rotV;this.sRot+=.009;
+    return !(this.a<0.008&&life>.75) && this.py > -200; // 飞出屏幕太高也销毁
   }
-
+  
   draw(){
-    if(this.alpha<0.005)return;
-    const b=bEnv(),sc=1+b*.09;
+    if(this.a<0.005)return;
+    const b=bEnv(), beatScale=1+b*.09;
     G.save();
-    G.globalAlpha=this.alpha;
-    G.translate(this.x,this.y);
+    G.globalAlpha=this.a;
+    // 使用透视投影后的坐标和缩放
+    G.translate(this.px, this.py);
     G.rotate(this.rot);
-    G.scale(sc,sc);
-    const t=this.type,sz=this.sz;
-    if(t==='quarter')      drawQuarter(sz,this.up,this.hl);
-    else if(t==='eighth')  drawEighth(sz,this.up,this.hl);
-    else if(t==='half')    drawHalf(sz,this.up,this.hl);
-    else if(t==='beamed')  drawBeamed(sz,this.hl);
-    else if(t.startsWith('heart')) drawHeart(sz);
-    else{G.rotate(this.starRot);drawStar(sz);}
+    G.scale(this.scale * beatScale, this.scale * beatScale);
+    
+    const t=this.t, sz=this.sz;
+    if(t==='Q')      drawQ3D(sz,this.up);
+    else if(t==='E') drawE3D(sz,this.up);
+    else if(t==='H') drawH3D(sz,this.up);
+    else if(t==='B') drawB3D(sz);
+    else if(t==='hs'||t==='hm'||t==='hl') drawHeart3D(sz);
+    else{G.rotate(this.sRot);drawStar3D(sz);}
     G.restore();
   }
 }
 
-// 初始数量减少（30个，分布全屏）
 const elems=[];
-for(let i=0;i<30;i++) elems.push(new Elem(true));
+for(let i=0;i<40;i++)elems.push(new Elem(true)); // 初始填充空间
 
-/* ════════════════════════════════════════
-   流水五线谱（一横带，更大更清晰）
-   ════════════════════════════════════════ */
-const STAFF_SP   = 17;    // 谱线间距（之前8.5，现在翻倍）
-const STAFF_BASE = ()=>H*.54; // 中心位置
-const STAFF_A    = 0.16;  // 透明度（之前0.042，现在4倍）
-
-function drawFlowingStaff(){
+/* ════════════════════════════════════════════════
+   3D 深度流水五线谱
+   ════════════════════════════════════════════════ */
+function drawStaff3D(){
   const t=F*.007;
-  // 整体上下漂浮（缓慢呼吸感）
-  const bob=Math.sin(t*.35)*7+Math.sin(t*.14)*4;
-  const cy0=STAFF_BASE()+bob;
-
   G.save();
   G.lineCap='round';
-
+  
+  // 5条线，在3D空间中从深处延伸出来
   for(let i=0;i<5;i++){
-    const baseY=cy0+(i-2)*STAFF_SP;
-    const ph=i*.6; // 每条线相位错开
-
-    // 每条谱线透明度略有差异，更自然
-    const la=STAFF_A*(0.82+i*.045);
-    G.strokeStyle=`rgba(18,15,10,${la})`;
-    G.lineWidth=1.3;
-
+    const ph=i*.6;
+    G.strokeStyle=`rgba(18,15,10,${(.18*(0.8+i*.05)).toFixed(3)})`;
+    G.lineWidth=1.5;
     G.beginPath();
-    const step=3;
-    const steps=Math.ceil(W/step);
-    for(let s=0;s<=steps;s++){
-      const x=s*step;
-      // 多频叠加 → 流水感
-      const wy=Math.sin(x*.0088+t*1.05+ph)*4.5
-               +Math.sin(x*.019 +t*.72+ph*.9)*2.2
-               +Math.sin(x*.038 -t*.58+ph*.5)*.9;
-      s===0?G.moveTo(x,baseY+wy):G.lineTo(x,baseY+wy);
+    
+    // Z 轴遍历，从深处到近处
+    let first = true;
+    for(let z=1600; z>=-FOV+100; z-=30){
+      // 这里的 x 是五线谱在3D空间中的位置，让它随 Z 轴呈波浪状
+      const x = Math.sin(z*0.003 + t*1.5 + ph) * 300;
+      const y = H*0.4 + Math.sin(z*0.005 - t*0.8 + ph) * 80; // 高度偏下，有波动
+
+      const scale = FOV / (FOV + z);
+      const px = cx + x * scale;
+      const py = cy + (y - H/2) * scale;
+      
+      if(first){ G.moveTo(px,py); first=false; }
+      else{ G.lineTo(px,py); }
     }
     G.stroke();
   }
   G.restore();
 }
 
-/* ════════════════════════════════════════
-   节拍光晕
-   ════════════════════════════════════════ */
-function drawBeatGlow(){
-  const b=bEnv();if(b<.02)return;
-  const r=Math.min(W,H)*.26*b;
-  const g=G.createRadialGradient(cx,cy,0,cx,cy,r);
-  g.addColorStop(0,`rgba(10,8,5,${b*.020})`);
-  g.addColorStop(1,'rgba(255,255,255,0)');
-  G.fillStyle=g;G.fillRect(0,0,W,H);
-}
-
-/* ════════════════════════════════════════
-   生成控制（减少数量）
-   ════════════════════════════════════════ */
-let spawnT=0;
-const MAX_ELEMS=32;
-const SPAWN_INT=58; // 每58帧生成一个（之前44）
-
-function spawnCtrl(){
-  spawnT++;
-  if(spawnT>=SPAWN_INT&&elems.length<MAX_ELEMS){
-    elems.push(new Elem(false));spawnT=0;
-  }
-  // 节拍额外生成（节制）
-  if(F%Math.round(BF)<2&&elems.length<MAX_ELEMS+3){
-    elems.push(new Elem(false));
-  }
-}
-
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════════
    主循环
-   ════════════════════════════════════════ */
+   ════════════════════════════════════════════════ */
+let spT=0;
 G.fillStyle='#fefefe';G.fillRect(0,0,W,H);
+
 function loop(){
   requestAnimationFrame(loop);F++;
-  G.fillStyle='rgba(254,254,254,.92)';
+  G.fillStyle='rgba(254,254,254,.94)'; // 略降低拖影透明度，让残影更干净
   G.fillRect(0,0,W,H);
 
-  drawFlowingStaff();
-  drawBeatGlow();
+  drawStaff3D();
+
+  const b=bEnv();
+  if(b>.02){
+    const r=Math.min(W,H)*.3*b,grd=G.createRadialGradient(cx,cy,0,cx,cy,r);
+    grd.addColorStop(0,`rgba(10,8,5,${(b*.020).toFixed(3)})`);
+    grd.addColorStop(1,'rgba(255,255,255,0)');
+    G.fillStyle=grd;G.fillRect(0,0,W,H);
+  }
+
+  // 必须按 Z 深度排序 (从远到近绘制，z大的在深处，后画z小的)
+  elems.sort((a, b) => b.z - a.z);
 
   for(let i=elems.length-1;i>=0;i--){
     const ok=elems[i].live();
     elems[i].draw();
-    if(!ok)elems.splice(i,1);
+    if(!ok) elems.splice(i,1);
   }
-  spawnCtrl();
+
+  spT++;
+  // 因为空间变深，最大元素数量适当增加
+  if(spT>=45 && elems.length<45){elems.push(new Elem(false));spT=0;}
+  if(F%Math.round(BF)<2 && elems.length<50)elems.push(new Elem(false));
 }
 loop();
 </script>
