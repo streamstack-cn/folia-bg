@@ -2,9 +2,9 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>Folia BG — 3D Floating Notes</title>
+<title>Folia BG — Musical Garden</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;}
+*{margin:0;padding:0;}
 html,body{width:100%;height:100%;overflow:hidden;background:#fefefe;}
 canvas{position:fixed;inset:0;width:100%;height:100%;}
 </style>
@@ -24,112 +24,89 @@ const rand=(a,b)=>a+Math.random()*(b-a);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
 
+/* ── Beat 78BPM ── */
 let F=0;
+const BPM=78,BF=60*60/BPM;
+function bEnv(){return Math.pow(clamp(1-(F%BF)/BF*2.3,0,1),2.8);}
 
 /* ══════════════════════════════════════
-   3D 风格绘制函数
+   PRIMITIVES — 一律在 (0,0) 绘制
    ══════════════════════════════════════ */
 
-// 生成具有 3D 质感的渐变（塑料光泽/气球质感）
-function get3DGradient(x, y, r, baseColor, alpha) {
-  // baseColor 类似 '30,25,20'
-  const grad = G.createRadialGradient(x - r*0.3, y - r*0.3, r*0.1, x, y, r*1.2);
-  grad.addColorStop(0, `rgba(255,255,255,${alpha})`); // 高光
-  grad.addColorStop(0.2, `rgba(120,110,100,${alpha})`); // 过渡
-  grad.addColorStop(0.6, `rgba(${baseColor},${alpha})`); // 本色
-  grad.addColorStop(1, `rgba(0,0,0,${alpha})`); // 暗部边缘
-  return grad;
-}
-
-// 3D 椭圆音符头
-function noteHead3D(sz, alpha, hollow=false){
-  G.save(); G.rotate(-.36);
-  G.beginPath(); G.ellipse(0,0,sz*.57,sz*.42,0,0,TAU);
-  if(!hollow){
-    G.fillStyle = get3DGradient(0, 0, sz*.6, '30,25,20', alpha);
-    G.fill();
+// 音符头（椭圆，含可选反光）
+function noteHead(sz,fill,highlight=false){
+  G.save();G.rotate(-.36);
+  G.beginPath();G.ellipse(0,0,sz*.57,sz*.42,0,0,TAU);
+  if(fill){
+    G.fillStyle='rgb(18,15,10)';G.fill();
+    if(highlight){
+      // 反光：右上方小亮斑
+      G.save();G.beginPath();
+      G.ellipse(-sz*.13,-sz*.12,sz*.19,sz*.11,.3,0,TAU);
+      G.fillStyle='rgba(255,255,255,.52)';G.fill();
+      G.restore();
+    }
   } else {
-    // 二分音符空心圈（环形 3D 感）
-    G.lineWidth = sz*.18;
-    // 使用径向渐变作为笔触，模拟圆环的体积感
-    const r = sz * 0.6;
-    const grad = G.createLinearGradient(-r, -r, r, r);
-    grad.addColorStop(0, `rgba(200,200,200,${alpha})`);
-    grad.addColorStop(0.5, `rgba(30,25,20,${alpha})`);
-    grad.addColorStop(1, `rgba(0,0,0,${alpha})`);
-    G.strokeStyle = grad;
-    G.stroke();
+    // 空心 (二分音符)
+    G.fillStyle='rgba(255,255,255,.92)';G.fill();
+    G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.13;G.stroke();
+    if(highlight){
+      G.save();G.beginPath();
+      G.ellipse(-sz*.16,-sz*.1,sz*.12,sz*.07,.2,0,TAU);
+      G.fillStyle='rgba(255,255,255,.55)';G.fill();
+      G.restore();
+    }
   }
   G.restore();
 }
 
-// 3D 柱状茎
-function stem3D(sz, up, alpha){
-  const sx=sz*.44, sy=up?-sz*.08:sz*.08, ey=up?-sz*2.85:sz*2.85;
-  G.beginPath(); G.moveTo(sx,sy); G.lineTo(sx,ey);
-  
-  // 线性渐变模拟圆柱体
-  const grad = G.createLinearGradient(sx - sz*.08, 0, sx + sz*.08, 0);
-  grad.addColorStop(0, `rgba(0,0,0,${alpha})`);
-  grad.addColorStop(0.3, `rgba(100,90,80,${alpha})`);
-  grad.addColorStop(0.5, `rgba(255,255,255,${alpha})`);
-  grad.addColorStop(0.7, `rgba(30,25,20,${alpha})`);
-  grad.addColorStop(1, `rgba(0,0,0,${alpha})`);
-
-  G.strokeStyle = grad; 
-  G.lineWidth=sz*.16; G.lineCap='round'; G.stroke();
+// 茎
+function stem(sz,up=true){
+  const sx=sz*.44,sy=up?-sz*.08:sz*.08,ey=up?-sz*2.85:sz*2.85;
+  G.beginPath();G.moveTo(sx,sy);G.lineTo(sx,ey);
+  G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.16;G.lineCap='round';G.stroke();
 }
 
-// 3D 小旗（八分音符）
-function flag3D(sz, up, alpha){
-  const sx=sz*.44, top=up?-sz*2.85:sz*2.85, d=up?1:-1;
-  G.beginPath(); G.moveTo(sx,top);
-  G.bezierCurveTo(sx+sz*1.25, top+sz*d*.52, sx+sz*1.1, top+sz*d*1.28, sx+sz*.12, top+sz*d*1.7);
-  
-  const grad = G.createLinearGradient(sx, top, sx+sz*1.25, top+sz*d*1.7);
-  grad.addColorStop(0, `rgba(80,70,60,${alpha})`);
-  grad.addColorStop(0.5, `rgba(30,25,20,${alpha})`);
-  grad.addColorStop(1, `rgba(0,0,0,${alpha})`);
-
-  G.strokeStyle=grad; G.lineWidth=sz*.15; G.lineCap='round'; G.stroke();
+// 小旗（八分）
+function flag(sz,up=true){
+  const sx=sz*.44,top=up?-sz*2.85:sz*2.85,d=up?1:-1;
+  G.beginPath();G.moveTo(sx,top);
+  G.bezierCurveTo(sx+sz*1.25,top+sz*d*.52,sx+sz*1.1,top+sz*d*1.28,sx+sz*.12,top+sz*d*1.7);
+  G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.15;G.lineCap='round';G.stroke();
 }
 
-// 3D 横梁（连音）
-function beam3D(sz, gap, alpha){
-  const sx=sz*.44, ex=gap+sz*.44, ty=-sz*3.08;
-  G.beginPath(); G.moveTo(sx,ty); G.lineTo(ex,ty);
-  
-  const grad = G.createLinearGradient(0, ty - sz*.2, 0, ty + sz*.2);
-  grad.addColorStop(0, `rgba(100,90,80,${alpha})`);
-  grad.addColorStop(0.3, `rgba(255,255,255,${alpha})`);
-  grad.addColorStop(0.6, `rgba(30,25,20,${alpha})`);
-  grad.addColorStop(1, `rgba(0,0,0,${alpha})`);
-
-  G.strokeStyle=grad; G.lineWidth=sz*.4; G.lineCap='round'; G.stroke();
+// 横梁（连音）
+function beam(sz,gap){
+  const sx=sz*.44,ex=gap+sz*.44,ty=-sz*3.08;
+  G.beginPath();G.moveTo(sx,ty);G.lineTo(ex,ty);
+  G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.4;G.lineCap='square';G.stroke();
 }
 
-// 组合音符
-function drawQuarter3D(sz, up, alpha){
-  noteHead3D(sz, alpha, false); stem3D(sz, up, alpha);
+// ── 音符种类 ──
+function drawQuarter(sz,up,hl){
+  noteHead(sz,true,hl);stem(sz,up);
 }
-function drawHalf3D(sz, up, alpha){
-  noteHead3D(sz, alpha, true); stem3D(sz, up, alpha);
+function drawHalf(sz,up,hl){
+  noteHead(sz,false,hl);stem(sz,up);
 }
-function drawEighth3D(sz, up, alpha){
-  noteHead3D(sz, alpha, false); stem3D(sz, up, alpha); flag3D(sz, up, alpha);
+function drawEighth(sz,up,hl){
+  noteHead(sz,true,hl);stem(sz,up);flag(sz,up);
 }
-function drawBeamed3D(sz, alpha){
+function drawBeamed(sz,hl){
   const gap=sz*2.3;
-  noteHead3D(sz, alpha, false);
-  G.save(); G.translate(gap,0); noteHead3D(sz, alpha, false); G.restore();
-  stem3D(sz, true, alpha);
-  G.save(); G.translate(gap,0); stem3D(sz, true, alpha); G.restore();
-  beam3D(sz, gap, alpha);
+  noteHead(sz,true,hl);
+  G.save();G.translate(gap,0);noteHead(sz,true,false);G.restore();
+  const sx=sz*.44,ty=-sz*3.08;
+  [0,gap].forEach(dx=>{
+    G.beginPath();G.moveTo(dx+sx,-sz*.08);G.lineTo(dx+sx,ty);
+    G.strokeStyle='rgb(18,15,10)';G.lineWidth=sz*.16;G.lineCap='round';G.stroke();
+  });
+  beam(sz,gap);
 }
 
-// 3D 爱心
-function drawHeart3D(sz, alpha){
-  G.save(); G.scale(sz/16, sz/16);
+// ── 爱心（参数化大小）──
+function drawHeart(sz){
+  G.save();G.scale(sz/16,sz/16);
   G.beginPath();
   G.moveTo(0,5);
   G.bezierCurveTo(-8,-2,-16,6,-16,12);
@@ -137,169 +114,164 @@ function drawHeart3D(sz, alpha){
   G.bezierCurveTo(0,29,16,21,16,12);
   G.bezierCurveTo(16,6,8,-2,0,5);
   G.closePath();
-  
-  // 立体红色材质
-  const grad = G.createRadialGradient(-4, 4, 1, 0, 10, 20);
-  grad.addColorStop(0, `rgba(255,150,150,${alpha})`);
-  grad.addColorStop(0.2, `rgba(220,50,50,${alpha})`);
-  grad.addColorStop(0.7, `rgba(120,10,10,${alpha})`);
-  grad.addColorStop(1, `rgba(40,0,0,${alpha})`);
-
-  G.fillStyle=grad; G.fill();
+  G.fillStyle='rgb(18,15,10)';G.fill();
+  // 小反光
+  if(sz>14){
+    G.save();G.beginPath();
+    G.ellipse(-sz*.22*16/sz,-sz*.18*16/sz,sz*.18*16/sz,sz*.1*16/sz,-.4,0,TAU);
+    G.fillStyle='rgba(255,255,255,.38)';G.fill();
+    G.restore();
+  }
   G.restore();
 }
 
-// 3D 星星（圆润膨胀感）
-function drawStar3D(sz, alpha){
+// ── 星星（四角闪耀）──
+function drawStar(sz){
   G.save();
-  const r1=sz, r2=sz*.45;
+  const r1=sz,r2=sz*.38;
   G.beginPath();
   for(let i=0;i<8;i++){
-    const a=i/8*TAU-PI/2, r=i%2===0?r1:r2;
-    // 使用二次贝塞尔曲线让星星看起来更圆润，像充气气球
-    const nextA = ((i+1)%8)/8*TAU-PI/2;
-    const nextR = (i+1)%2===0?r1:r2;
-    const cpX = Math.cos((a+nextA)/2) * ((r+nextR)/2 * 0.8);
-    const cpY = Math.sin((a+nextA)/2) * ((r+nextR)/2 * 0.8);
-    
-    if(i===0) G.moveTo(Math.cos(a)*r, Math.sin(a)*r);
-    G.quadraticCurveTo(cpX, cpY, Math.cos(nextA)*nextR, Math.sin(nextA)*nextR);
+    const a=i/8*TAU-PI/2,r=i%2===0?r1:r2;
+    i===0?G.moveTo(Math.cos(a)*r,Math.sin(a)*r):G.lineTo(Math.cos(a)*r,Math.sin(a)*r);
   }
   G.closePath();
-  
-  // 立体金色材质
-  const grad = G.createRadialGradient(-sz*.2, -sz*.2, sz*.05, 0, 0, sz);
-  grad.addColorStop(0, `rgba(255,255,200,${alpha})`);
-  grad.addColorStop(0.3, `rgba(255,200,50,${alpha})`);
-  grad.addColorStop(0.8, `rgba(150,100,10,${alpha})`);
-  grad.addColorStop(1, `rgba(50,30,0,${alpha})`);
-
-  G.fillStyle=grad; G.fill();
+  G.fillStyle='rgb(18,15,10)';G.fill();
+  // 中心反光点
+  G.beginPath();G.arc(-sz*.12,-sz*.14,sz*.14,0,TAU);
+  G.fillStyle='rgba(255,255,255,.4)';G.fill();
   G.restore();
 }
 
 /* ══════════════════════════════════════
    浮动元素 Particle
    ══════════════════════════════════════ */
-const POOL=['quarter','eighth','half','beamed','heart','star'];
+// 类型权重：60%音符，25%爱心，15%星星
+const POOL=[
+  {t:'quarter',w:8},{t:'eighth',w:8},{t:'half',w:5},{t:'beamed',w:7},
+  {t:'heart_sm',w:5},{t:'heart_md',w:5},{t:'heart_lg',w:3},
+  {t:'star_sm',w:4},{t:'star_md',w:3},
+];
+const POOL_TOTAL=POOL.reduce((s,p)=>s+p.w,0);
+function pickType(){
+  let r=rand(0,POOL_TOTAL);
+  for(const p of POOL){if(r<p.w)return p.t;r-=p.w;}
+  return 'quarter';
+}
 
 class Elem{
   constructor(init=false){this.reset(init);}
   reset(init=false){
-    this.type = POOL[Math.floor(rand(0, POOL.length))];
-    
-    // 尺寸差异化
-    if(this.type === 'heart' || this.type === 'star') {
-        this.sz = rand(10, 35); // 大小分布更广
-    } else {
-        this.sz = rand(12, 28);
-    }
+    const t=this.type=pickType();
+    this.x=rand(W*.05,W*.95);
+    this.y=init?rand(H*.05,H*.96):H+rand(20,90);
 
-    this.x = rand(this.sz * 2, W - this.sz * 2);
-    this.y = init ? rand(H*.1, H*.9) : H + rand(20, 80);
+    // 尺寸
+    this.sz=t==='quarter'||t==='eighth'||t==='half'?rand(10,26):
+             t==='beamed'?rand(8,17):
+             t==='heart_sm'?rand(5,11):
+             t==='heart_md'?rand(13,22):
+             t==='heart_lg'?rand(26,42):
+             t==='star_sm'?rand(4,9):rand(11,20);
 
-    // 透明度层次
-    this.tAlpha = rand(0.3, 0.95);
+    // 透明度：故意分布很广，形成远近感
+    this.tAlpha=t.startsWith('heart')||t.startsWith('star')
+      ? rand(0.18,0.72)
+      : rand(0.20,0.85);
 
-    this.up = Math.random() > .5;
-    this.vy = rand(-1.2, -2.5); // 上浮速度
-    this.vx = rand(-1.5, 1.5);  // 水平速度，用于回弹
-    
-    // 旋转
-    this.rot = rand(-PI*.2, PI*.2);
-    this.rotV = rand(-.02, .02);
-    
-    // 飘动 (左右微微摇摆)
-    this.swayF = rand(.5, 1.5);
-    this.swayP = rand(0, TAU);
-
-    this.alpha = 0;
-    this.born = F;
-    this.life = rand(500, 1000);
-    this.fadeT = rand(30, 60);
+    this.hl=Math.random()<.48; // 48%有反光
+    this.up=Math.random()>.45;
+    this.vy=rand(-.48,-1.08);
+    this.vx=rand(-.22,.22);
+    this.rot=rand(-PI*.3,PI*.3);
+    this.rotV=rand(-.007,.007);
+    this.swayA=rand(6,26);
+    this.swayF=rand(.5,1.8);
+    this.swayP=rand(0,TAU);
+    this.alpha=0;
+    this.born=F;
+    this.life=rand(420,860);
+    this.fadeT=rand(55,110);
+    this.starRot=rand(0,TAU);
   }
-  
   live(){
-    const age = F - this.born;
-    const lifeRatio = age / this.life;
+    const age=F-this.born,life=age/this.life;
+    const b=bEnv();
+    if(age<this.fadeT)      this.alpha=lerp(0,this.tAlpha,age/this.fadeT);
+    else if(life>.68)       this.alpha=lerp(this.tAlpha,0,(life-.68)/.32);
+    else                    this.alpha=this.tAlpha;
     
-    if(age < this.fadeT) this.alpha = lerp(0, this.tAlpha, age/this.fadeT);
-    else if(lifeRatio > .8) this.alpha = lerp(this.tAlpha, 0, (lifeRatio-.8)/.2);
-    else this.alpha = this.tAlpha;
-
-    // 运动学：结合基础 vx 和正弦摇摆
-    let currentVx = this.vx + Math.sin(F*.01 * this.swayF + this.swayP) * 0.5;
+    let currentVx = this.vx + Math.sin(F*.016*this.swayF+this.swayP)*.25;
     this.x += currentVx;
-    this.y += this.vy;
+    this.y += this.vy*(1+b*.18);
     this.rot += this.rotV;
+    this.starRot += .009;
 
-    // 边缘回弹逻辑
     const margin = this.sz * 1.5;
     if (this.x < margin) {
         this.x = margin;
-        this.vx = Math.abs(this.vx); // 向右弹
+        this.vx = Math.abs(this.vx);
     } else if (this.x > W - margin) {
         this.x = W - margin;
-        this.vx = -Math.abs(this.vx); // 向左弹
+        this.vx = -Math.abs(this.vx);
     }
 
-    return age < this.life && this.y > -100 && this.alpha > 0.001;
+    return age<this.life&&this.y>-150;
   }
-  
   draw(){
+    const b=bEnv(),sc=1+b*.09;
     G.save();
-    G.translate(this.x, this.y);
+    G.globalAlpha=this.alpha;
+    G.translate(this.x,this.y);
     G.rotate(this.rot);
-    
-    const t = this.type, sz = this.sz, a = this.alpha;
-    
-    // 绘制阴影增强 3D 浮动感
-    G.shadowColor = `rgba(0,0,0,${a * 0.3})`;
-    G.shadowBlur = sz * 0.8;
-    G.shadowOffsetX = sz * 0.3;
-    G.shadowOffsetY = sz * 0.5;
-
-    if(t==='quarter') drawQuarter3D(sz, this.up, a);
-    else if(t==='eighth') drawEighth3D(sz, this.up, a);
-    else if(t==='half')   drawHalf3D(sz, this.up, a);
-    else if(t==='beamed') drawBeamed3D(sz, a);
-    else if(t==='heart')  drawHeart3D(sz, a);
-    else if(t==='star')   drawStar3D(sz, a);
-    
+    G.scale(sc,sc);
+    const t=this.type,sz=this.sz;
+    if(t==='quarter') drawQuarter(sz,this.up,this.hl);
+    else if(t==='eighth') drawEighth(sz,this.up,this.hl);
+    else if(t==='half')   drawHalf(sz,this.up,this.hl);
+    else if(t==='beamed') drawBeamed(sz,this.hl);
+    else if(t.startsWith('heart')) drawHeart(sz);
+    else{ // star
+      G.rotate(this.starRot);
+      drawStar(sz);
+    }
     G.restore();
   }
 }
 
 const elems=[];
-for(let i=0;i<45;i++) elems.push(new Elem(true));
+for(let i=0;i<42;i++) elems.push(new Elem(true));
 
 /* ══════════════════════════════════════
-   流水五线谱（居中，缓慢摆动）
+   流水五线谱（一条横带，缓慢摆动）
    ══════════════════════════════════════ */
-const STAFF_SP=12;        // 谱线间距
-const STAFF_ALPHA=0.15;   // 透明度
+const STAFF_CY=()=>H*.56; // 五线谱中心 Y（随屏幕变化）
+const STAFF_SP=8.5;        // 谱线间距
+const STAFF_ALPHA=0.042;   // 极低透明度
 
 function drawFlowingStaff(){
-  const t=F*.01;
-  const cy0 = cy + Math.sin(t*.3)*15; // 整体中心缓慢上下漂浮
+  const t=F*.007;
+  // 整体缓慢上下漂浮
+  const bob=Math.sin(t*.38)*5.5+Math.sin(t*.17)*3;
+  const cy0=STAFF_CY()+bob;
 
   G.save();
-  G.strokeStyle=`rgba(30,25,20,${STAFF_ALPHA})`;
-  G.lineWidth=1.5; G.lineCap='round';
+  G.strokeStyle=`rgba(18,15,10,${STAFF_ALPHA})`;
+  G.lineWidth=1.0;G.lineCap='round';
 
   for(let i=0;i<5;i++){
     const baseY=cy0+(i-2)*STAFF_SP;
-    const ph=i*.4; // 错开相位
-    
+    const ph=i*.55; // 相位错开 → 每条线独立波动
+
     G.beginPath();
-    const step=10;
+    const step=4;
     const steps=Math.ceil(W/step);
     for(let s=0;s<=steps;s++){
       const x=s*step;
       const wy=
-        Math.sin(x*.005 + t*1.2 + ph) * 8 +
-        Math.sin(x*.015 - t*0.8 + ph) * 4;
-      s===0 ? G.moveTo(x, baseY+wy) : G.lineTo(x, baseY+wy);
+        Math.sin(x*.0095+t*1.1+ph)   *3.2+
+        Math.sin(x*.021 +t*.75+ph*.8)*1.6+
+        Math.sin(x*.041 -t*.55+ph*.4)*.8;
+      s===0?G.moveTo(x,baseY+wy):G.lineTo(x,baseY+wy);
     }
     G.stroke();
   }
@@ -307,32 +279,51 @@ function drawFlowingStaff(){
 }
 
 /* ══════════════════════════════════════
+   节拍光晕（极淡）
+   ══════════════════════════════════════ */
+function drawBeatGlow(){
+  const b=bEnv();if(b<.02)return;
+  const r=Math.min(W,H)*.28*b;
+  const g=G.createRadialGradient(cx,cy,0,cx,cy,r);
+  g.addColorStop(0,`rgba(10,8,5,${b*.022})`);
+  g.addColorStop(1,'rgba(255,255,255,0)');
+  G.fillStyle=g;G.fillRect(0,0,W,H);
+}
+
+/* ══════════════════════════════════════
+   生成控制
+   ══════════════════════════════════════ */
+let spawnT=0;
+function spawnCtrl(){
+  spawnT++;
+  if(spawnT>=44&&elems.length<52){
+    elems.push(new Elem(false));spawnT=0;
+  }
+  // 节拍触发：少量额外音符
+  if(F%Math.round(BF)<2&&elems.length<58){
+    elems.push(new Elem(false));
+  }
+}
+
+/* ══════════════════════════════════════
    主循环
    ══════════════════════════════════════ */
 G.fillStyle='#fefefe';G.fillRect(0,0,W,H);
-
 function loop(){
-  requestAnimationFrame(loop); F++;
-  
-  // 拖影清理背景
-  G.fillStyle='rgba(254,254,254,0.4)';
+  requestAnimationFrame(loop);F++;
+  G.fillStyle='rgba(254,254,254,.92)';
   G.fillRect(0,0,W,H);
 
-  drawFlowingStaff();
+  drawFlowingStaff(); // 五线谱（最底层）
+  drawBeatGlow();     // 节拍光晕
 
-  // 维持元素数量
-  if(elems.length < 50 && Math.random() < 0.05) {
-      elems.push(new Elem(false));
+  // 浮动元素
+  for(let i=elems.length-1;i>=0;i--){
+    const ok=elems[i].live();
+    elems[i].draw();
+    if(!ok) elems.splice(i,1);
   }
-
-  // 浮动元素更新和绘制
-  for(let i=elems.length-1; i>=0; i--){
-    if(!elems[i].live()){
-        elems.splice(i,1);
-    } else {
-        elems[i].draw();
-    }
-  }
+  spawnCtrl();
 }
 loop();
 </script>
